@@ -1,0 +1,6 @@
+Agency,Agency Abbreviation,Program,Duration,Frequency,Parameters
+Nebraska Department of Environmental Quality,NDEQ,Ambient Lake Monitoring Program (ALMP),May - September,montly,
+,,Beach Monitoring Program (BMP),May - September,weekly,"total microcystins (ELISA -adda), Escherichia coli"
+National Oceanic and Atmospheric Administration,NOAA,Climate,April - October,daily,"max temperature, min temperature, precipitation, wind speed, wind direction"
+US Environmental Protection Agency,USEPA,,,,
+US Army Corp of Engineers,USACOE,,,,
