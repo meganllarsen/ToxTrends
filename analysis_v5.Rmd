@@ -1,0 +1,1500 @@
+---
+title: Seasonal and annual trends in cyanotoxins within eastern Nebraskan lakes
+subtitle: A case study from three hydromorphically different lakes
+output: 
+  pdf_document:
+    highlight: tango
+    fig_caption: yes
+    number_sections: yes
+geometry: margin=0.75in
+fontsize: 11pt
+
+---
+**Megan L. Larsen** and Daniel D. Snow 
+
+*University of Nebraska-Lincoln Water Sciences Laboratory*
+
+1840 N. 37th Street
+
+Lincoln, Nebraska USA 68583-0844
+
+This analysis has been prepared in conjunction with our manuscript for THIS JOURNAL
+
+Data analysis for this project was completed with `r sessionInfo()$R.version$version.string`.
+
+\clearpage
+
+
+#Project Summary
+
+##**Overview**
+
+
+##**Project questions**
+
+What are the temporal (annual and seasonal) patterns of microcystins in the selected lake/reservoir systems? 
+-- Focus on microcystins with coupled lake monitoring data available in Storet
+
+What are the temporal patterns in physical, chemical, and biological characteristics of Nebraska Lakes? 
+-- Incorporate information from the Ambient Lake Monitoring programs with NDEQ with microcystins 
+-- make note of lake treatments
+
+How do different analytical methods (ELISA vs. LC/MS) compare for the detection of algal toxins? 
+-- Total concentration 
+-- Specificity (ELISA = broad; LC/MS = analyte specific) 
+-- detection of other cyanotoxins: Many programs have regulations for other toxins (Ohio)
+
+##**List of abbrevations**
+
+NDEQ: Nebraska Department of Environmental Quality
+
+USEPA: United States Environmental Protection Agency
+
+USACOE: United States Army Corp of Engineers
+
+USGS: United States Geological Survey
+
+NOAA: National Oceanic and Atmospheric Administration
+
+\newpage 
+\tableofcontents 
+\newpage
+\listoftables
+\newpage
+\listoffigures
+\newpage
+
+
+```{r WorkingEnv, echo = FALSE, message=FALSE}
+setwd("C:/Users/meglarse/GitHub/ToxTrends/")
+
+knitr::opts_chunk$set(fig.width=7, fig.height=8,
+                      echo = FALSE, warning = FALSE, message = FALSE)
+
+require(ggplot2);require(gridExtra);require(pander);require(reshape2)
+
+
+theme_std <- function (base_size = 12, base_family = "") 
+{
+    theme_grey(base_size = base_size, base_family = base_family) %+replace% 
+        theme(axis.text = element_text(size = rel(0.8)), 
+              axis.ticks = element_line(colour = "black"), 
+              legend.key = element_rect(colour = "grey80"), 
+              panel.background = element_rect(fill = "white", colour = NA), 
+              panel.border = element_rect(fill = NA, colour = "grey50"), 
+              panel.grid.major = element_line(NA), 
+              panel.grid.minor = element_line(NA), 
+              strip.background = element_rect(fill = "grey80", colour = "grey50", size = 0.2))
+}
+
+theme_set(theme_std())
+
+```
+
+# Materials and Methods
+## Lake descriptions
+```{r}
+require(ggmap)
+# Load sample points
+ndeq.stn <- read.csv("./data/ndeq_station.csv", header = TRUE)
+smp.points <- read.csv("./data/sitedescriptions.csv")
+noaa.dat <- read.csv("./data/noaa_data.csv", header = TRUE)
+
+#load libraries for chunk
+library(maps);library(mapdata)
+library(maptools) # for shapefiles
+#library(scales)   #for transparency
+#library(mapplots)
+#library(rgdal)
+
+library(raster)
+
+# Main Map
+main.map <- get_map(location = c(-96.318667,41.084526), zoom = 9,
+                       maptype = "toner", source = "stamen")
+
+main <- ggmap(main.map, extent = "panel",legend = "right") +
+  geom_point(data = smp.points, aes(LongitudeMeasure, LatitudeMeasure), 
+             col = "grey",bg = "red", pch = 21, cex =4) +
+  geom_point(data = noaa.dat, aes(x = LONGITUDE, y = LATITUDE), 
+             pch = 22, col = "grey", bg = "black", cex = 4) +
+  xlab("Longitude") + ylab("Latitude") +
+  theme(panel.border = element_rect(fill = NA))
+#print(main)
+
+#ggsave("./supporting-files/FigS1-Main.pdf", main, units = "in", 
+#       scale = 1.5, height = 4, width = 4)
+```
+
+Data for this project was collected from publically available datasets available through the National Oceanic and Atmospheric Administration and the Environmental Protection Agency's STORET download tool. 
+Contributing agencies, the data type, and sampling station location are described in Table 1 below.
+
+```{r ListofStations}
+stations.table <- smp.points[,c("OrganizationFormalName","LakeName","MonitoringLocationIdentifier","LatitudeMeasure","LongitudeMeasure")]
+colnames(stations.table)<-c("Organization","Lake","Location ID","Latitude","Longitude")
+pander(stations.table)
+```
+
+Prior to the start of any comparisons within or across lakes, we first cleaned-up the dataset by ensuring parameter units were equivalent... The ELISA -adda kit has a lower reporting limit of 0.15 therefore any reported value less than 0.15 \mu g/L were converted to 0 \mu g/L 
+
+```{r dataconvert}
+dat <- read.csv("./data/result.csv", header = TRUE)
+
+# Do some data cleanup for this analysis
+
+dat$ResultMeasureValue <- as.numeric(as.character(dat$ResultMeasureValue))
+
+## Convert ActivityStartDate to a Juilan value to look at annual and decadal patterns
+require(lubridate)
+require(ggplot2)
+
+dat$tmp <- as.Date(dat$ActivityStartDate, format = "%Y-%m-%d") #Converts data to date structure
+dat$yr <- as.numeric(format(dat$tmp,'%Y'))         #Time is 
+dat$yr.fac <- as.factor(as.numeric(format(dat$tmp,'%Y')))         #Time is now numeric
+dat$mo <- as.factor(format(dat$tmp,'%m'))
+dat$jul.dat <- yday(dat$tmp)                                  #Time is now in Julian
+dat$wk <- week(dat$tmp)
+
+dat <- dat[dat$ActivityMediaName != "Sediment",]
+```
+
+```{r decadal-trends}
+## Subset the microcystins data
+
+bmp <- dat[dat$CharacteristicName == "Microcystin" & 
+             dat$OrganizationIdentifier == "21NEB001_WQX",]
+
+## NDEQ sites of interest
+sites <- c("21NEB001_WQX-LLP1FRMT2004","21NEB001_WQX-LLP1FRMT2005","21NEB001_WQX-LLP2PAWNEE03","21NEB001_WQX-LLP2PAWNEE05", "21NEB001_WQX-LMT1CARTER03")
+
+bmp <- bmp[bmp$MonitoringLocationIdentifier %in% sites,]
+
+# Remove quality control samples
+bmp <- bmp[bmp$ActivityTypeCode != "Quality Control Sample-Lab Blank" & bmp$ActivityTypeCode != "Quality Control Sample-Field Replicate",]
+
+# Subset for the 2005-2015 decade
+bmp <- bmp[bmp$yr != 2004,]
+
+# detection limit is 0.15, change all values less than 0.15 to 0
+bmp$ResultMeasureValue[bmp$ResultMeasureValue <0.15] <- 0
+```
+
+
+```{r, include = FALSE}
+# Inset Map
+pdf("./supporting-files/FigS1-Inset.pdf")
+map("state", col = "grey", boundary = TRUE,  lty = 2)
+map("worldHires","USA", xlim = c(-130,-65), ylim = c(25,50), 
+    col = "black", boundary = TRUE, add = TRUE)
+map("state","Nebraska", col = "grey", fill = TRUE, add = TRUE) 
+points(x=-96.318667,y=41.084526, pch = 15, col = "red")
+dev.off()
+```
+
+\clearpage
+
+# Results: Microcystins
+## Annual and seasonal trends in cyanotoxins from NDEQ data
+
+
+```{r, fig.cap = "Annual variation in microcystin concentrations across focal lakes from 2005 - 2015. Microcystin concentrations were quaitified by the NDEQ as part of the Beach Monitoring Program (BMP) using ELISA.", fig.height=6}
+
+p1 = ggplot(bmp, aes(yr.fac,ResultMeasureValue)) +
+  geom_hline(yintercept = 20, col = "red", lty = 1, lwd = 1) +
+  geom_point(cex = 1) +
+  geom_boxplot(fill = NA) + 
+  xlab("Year") + ylab(expression(paste("Microcystin Concentration (", mu,"g/L)"))) +
+  facet_wrap(~MonitoringLocationIdentifier, ncol = 2)
+
+print(p1)
+
+
+#ggsave("./supporting-files/20160818-AnnualTrends.pdf", p1, 
+#       scale = 1.5, width = 6, height = 6, units = "in", dpi = 300)
+```
+
+\clearpage
+
+```{r IndvLakeTrends, fig.cap= "Annual mean microcystin concentration for each lake system. Lake closure levels for the state of Nebraska prior to 2017 required a toxin concentration > 20 ug/L (red). Effective for the 2017 season, lake closure levels were reduced to 4 ug/L (black)"}
+bmp.paw <- bmp[grep("PAW", bmp$MonitoringLocationIdentifier),]
+bmp.fre <- bmp[grep("FRM", bmp$MonitoringLocationIdentifier),]
+bmp.car <- bmp[grep("CAR", bmp$MonitoringLocationIdentifier),]
+
+
+annual.paw = ggplot(bmp.paw, aes(yr,ResultMeasureValue)) +
+  ylim(0,80) +
+  scale_x_continuous(breaks = c(2005:2015)) +
+  geom_hline(yintercept = 20, col = "red", lty = 1, lwd = 1) +
+  geom_hline(yintercept = 4, col = "black", lty = 1, lwd = 1) +
+  geom_jitter(cex = 1, col = "grey50", width = 0.2, height = 0.1)  +
+  stat_summary(fun.data = "mean_cl_boot", color = "black", size = 1) +
+  xlab("Year") + ylab(expression(paste("Microcystin Concentration (", mu,"g/L)"))) +
+  annotate("text", y = Inf, x = Inf, label = "Pawnee Lake", vjust = 2, hjust = 1.25)
+
+#print(annual.paw)
+
+annual.fre = ggplot(bmp.fre, aes(yr,ResultMeasureValue)) +
+  ylim(0,80) +
+  scale_x_continuous(breaks = c(2005:2015)) +
+  geom_hline(yintercept = 20, col = "red", lty = 1, lwd = 1) +
+  geom_hline(yintercept = 4, col = "black", lty = 1, lwd = 1) +
+  geom_jitter(cex = 1, col = "grey50", width = 0.2, height = 0.1)  +
+  stat_summary(fun.data = "mean_cl_boot", color = "black", size = 1) +
+  xlab("Year") + ylab(expression(paste("Microcystin Concentration (", mu,"g/L)"))) +
+  annotate("text", y = Inf, x = Inf, label = "Fremont Lake No. 20", vjust = 2, hjust = 1.15)
+
+#print(annual.fre)
+
+annual.car = ggplot(bmp.car, aes(yr,ResultMeasureValue)) +
+  ylim(0,50) +
+  scale_x_continuous(breaks = c(2005:2015)) +
+  geom_hline(yintercept = 20, col = "red", lty = 1, lwd = 1) +
+  geom_hline(yintercept = 4, col = "black", lty = 1, lwd = 1) +
+  geom_jitter(cex = 1, col = "grey50", width = 0.2, height = 0.1) +
+  stat_summary(fun.data = "mean_cl_boot", color = "black", size = 1) +
+  xlab("Year") + ylab(expression(paste("Microcystin Concentration (", mu,"g/L)"))) +
+  annotate("text", y = Inf, x = Inf, label = "Carter Lake", vjust = 2, hjust = 1.25)
+
+#print(annual.car)
+
+grid.arrange(annual.paw,annual.fre, annual.car, ncol = 1)
+
+
+#Notes:
+# -- Add lake labels to plots
+# -- add polygons to highlight study years
+
+```
+
+```{r TrendStats}
+
+#H0: Mic concentrations were the same between years?
+#H1: Some years had higher concentrations of microcystins.
+#H2: Concentrations between lakes are different.
+## Testing mean annual concentrations
+
+require(nlme)
+fit <- lme(ResultMeasureValue ~ yr.fac, random = ~ 1 | MonitoringLocationIdentifier, 
+            correlation=corAR1(form = ~ 1 | MonitoringLocationIdentifier),
+            data = bmp, na.action = "na.omit")
+
+
+#summary(fit)
+
+# Mean seasonal concentrations per year in each lake
+bmp3 <- aggregate(ResultMeasureValue ~ yr.fac + MonitoringLocationIdentifier, data = bmp, mean)
+
+# Pawnee
+fit.paw.aov <- aov(ResultMeasureValue ~ yr.fac, data = bmp.paw)
+#summary(fit.paw.aov)
+pander(fit.paw.aov)
+
+res <- TukeyHSD(fit.paw.aov)
+emphasize.strong.rows(which(res$yr.fac[,4] < 0.05 , arr.ind = TRUE))
+pander(res)
+
+fit.paw.lme <- lme(ResultMeasureValue ~ yr.fac, random = ~ 1 | mo,
+            correlation=corAR1(form = ~ 1 | mo),
+            data = bmp.paw, na.action = "na.omit")
+
+anova(fit.paw.lme)
+summary(fit.paw.lme)
+```
+
+\clearpage
+
+```{r}
+# Carter
+fit.car.aov <- aov(data = bmp.car, ResultMeasureValue ~ yr.fac)
+pander(fit.car.aov)
+
+res <- TukeyHSD(fit.car.aov)
+emphasize.strong.rows(which(res$yr.fac[,4] < 0.05 , arr.ind = TRUE))
+pander(res)
+```
+\clearpage
+
+```{r}
+# Fremont
+fit.fre.aov <- aov(data = bmp.fre, ResultMeasureValue ~ yr.fac)
+pander(fit.fre.aov)
+
+res <- TukeyHSD(fit.fre.aov)
+emphasize.strong.rows(which(res$yr.fac[,4] < 0.05 , arr.ind = TRUE))
+pander(res)
+
+
+#summary(fit.fre)
+#TukeyHSD(fit)
+
+```
+
+**Followup questions**
+1. What happened in 2009 to decrease microcystin trends across all three lake systems?
+
+
+\clearpage
+### Q: What percentage of samples had detectable microcystins (> 0.15 mg/L for ELISA? What percentage of samples had total microcystin concentrations exceeding the WHO limit?
+
+```{r DetMic}
+## What percentage of samples have detectable microcystins
+#For each location > for each year > for each month within a year
+
+loc.list1 <- c()
+loc.list2 <-c()
+yr.list1 <- c() 
+yr.list2 <- c() 
+mo.list <- c() 
+yr.perc.list <- c() 
+mo.perc.list <- c()
+yr.above.list <-c()
+yr.total.list <-c()
+mo.above.list <-c()
+mo.total.list <-c()
+
+for(i in unique(bmp$MonitoringLocationIdentifier)){
+  tmp <- bmp[bmp$MonitoringLocationIdentifier == i,]
+  
+  
+  for(j in unique(tmp$yr.fac)){
+    yr.above <- dim(tmp[tmp$yr.fac == j & tmp$ResultMeasureValue >= 0.15,])[1]
+    yr.total <- dim(tmp[tmp$yr.fac == j,])[1]
+    yr.perc <- round((yr.above/yr.total)*100, digits = 2)
+    
+
+    yr.above.list <- append(yr.above.list, yr.above)
+    yr.total.list <- append(yr.total.list, yr.total)
+    
+    yr.list1 <- append(yr.list1, rep(j,length(yr.perc)))
+    yr.perc.list <- append(yr.perc.list, yr.perc)
+    loc.list1 <- append(loc.list1, rep(i, length(yr.perc)))
+    
+    for(k in unique(tmp$mo)){
+      tmp2 <- tmp[tmp$mo == k & tmp$yr.fac == j,]
+      mo.above <- dim(tmp2[tmp2$ResultMeasureValue >= 0.15,])[1]
+      mo.total <- dim(tmp2)[1]
+      mo.perc <- round((mo.above/mo.total)*100, digits = 2)
+      
+      mo.above.list <- append(mo.above.list, mo.above)
+      mo.total.list <- append(mo.total.list, mo.total)
+      
+      yr.list2 <- append(yr.list2, rep(j, length(mo.perc)))
+      mo.list <- append(mo.list, rep(k, length(mo.perc)))
+      mo.perc.list <- append(mo.perc.list, mo.perc)
+      loc.list2 <- append(loc.list2, rep(i, length(mo.perc)))
+    }
+  }
+}
+
+yr.perc <- data.frame(loc.list1, yr.list1, yr.above.list, yr.total.list,yr.perc.list)
+mo.perc <- data.frame(loc.list2, yr.list2, mo.list, 
+                      mo.above.list, mo.total.list,mo.perc.list)
+yr.ag1 <- aggregate(yr.above.list ~ loc.list1, data = yr.perc, sum)
+yr.ag2 <- aggregate(yr.total.list ~ loc.list1, data = yr.perc, sum)
+
+```
+
+```{r WHOMic}
+
+#For each location > for each year > for each month within a year
+
+loc.list1 <- c()
+loc.list2 <-c()
+yr.list1 <- c() 
+yr.list2 <- c() 
+mo.list <- c() 
+yr.perc.list <- c() 
+mo.perc.list <- c()
+yr.above.list <-c()
+yr.total.list <-c()
+mo.above.list <-c()
+mo.total.list <-c()
+
+for(i in unique(bmp$MonitoringLocationIdentifier)){
+  tmp <- bmp[bmp$MonitoringLocationIdentifier == i,]
+  
+  
+  for(j in unique(tmp$yr.fac)){
+    yr.above <- dim(tmp[tmp$yr.fac == j & tmp$ResultMeasureValue >= 20,])[1]
+    yr.total <- dim(tmp[tmp$yr.fac == j,])[1]
+    yr.percent <- round((yr.above/yr.total)*100, digits = 2)
+    
+
+    yr.above.list <- append(yr.above.list, yr.above)
+    yr.total.list <- append(yr.total.list, yr.total)
+    
+    yr.list1 <- append(yr.list1, rep(j,length(yr.percent)))
+    yr.perc.list <- append(yr.perc.list, yr.percent)
+    loc.list1 <- append(loc.list1, rep(i, length(yr.percent)))
+    
+    for(k in unique(tmp$mo)){
+      tmp2 <- tmp[tmp$mo == k & tmp$yr.fac == j,]
+      mo.above <- dim(tmp2[tmp2$ResultMeasureValue >= 20,])[1]
+      mo.total <- dim(tmp2)[1]
+      mo.percent <- round((mo.above/mo.total)*100, digits = 2)
+      
+      mo.above.list <- append(mo.above.list, mo.above)
+      mo.total.list <- append(mo.total.list, mo.total)
+      
+      yr.list2 <- append(yr.list2, rep(j, length(mo.percent)))
+      mo.list <- append(mo.list, rep(k, length(mo.percent)))
+      mo.perc.list <- append(mo.perc.list, mo.percent)
+      loc.list2 <- append(loc.list2, rep(i, length(mo.percent)))
+    }
+  }
+}
+
+yr.perc2 <- data.frame(loc.list1, yr.list1, 
+                      yr.above.list, yr.total.list,
+                      yr.perc.list)
+mo.perc2 <- data.frame(loc.list2, yr.list2, mo.list, 
+                      mo.above.list, mo.total.list,
+                      mo.perc.list)
+
+yr.perc2.ag1 <- aggregate(yr.above.list ~ loc.list1, data = yr.perc2, sum)
+yr.perc2.ag2 <- aggregate(yr.total.list ~ loc.list1, data = yr.perc2, sum)
+
+```
+
+```{r EPAMic}
+
+#For each location > for each year > for each month within a year
+
+loc.list1 <- c()
+loc.list2 <-c()
+yr.list1 <- c() 
+yr.list2 <- c() 
+mo.list <- c() 
+yr.perc.list <- c() 
+mo.perc.list <- c()
+yr.above.list <-c()
+yr.total.list <-c()
+mo.above.list <-c()
+mo.total.list <-c()
+
+for(i in unique(bmp$MonitoringLocationIdentifier)){
+  tmp <- bmp[bmp$MonitoringLocationIdentifier == i,]
+  
+  
+  for(j in unique(tmp$yr.fac)){
+    yr.above <- dim(tmp[tmp$yr.fac == j & tmp$ResultMeasureValue >= 4,])[1]
+    yr.total <- dim(tmp[tmp$yr.fac == j,])[1]
+    yr.percent <- round((yr.above/yr.total)*100, digits = 2)
+    
+
+    yr.above.list <- append(yr.above.list, yr.above)
+    yr.total.list <- append(yr.total.list, yr.total)
+    
+    yr.list1 <- append(yr.list1, rep(j,length(yr.percent)))
+    yr.perc.list <- append(yr.perc.list, yr.percent)
+    loc.list1 <- append(loc.list1, rep(i, length(yr.percent)))
+    
+    for(k in unique(tmp$mo)){
+      tmp2 <- tmp[tmp$mo == k & tmp$yr.fac == j,]
+      mo.above <- dim(tmp2[tmp2$ResultMeasureValue >= 4,])[1]
+      mo.total <- dim(tmp2)[1]
+      mo.percent <- round((mo.above/mo.total)*100, digits = 2)
+      
+      mo.above.list <- append(mo.above.list, mo.above)
+      mo.total.list <- append(mo.total.list, mo.total)
+      
+      yr.list2 <- append(yr.list2, rep(j, length(mo.percent)))
+      mo.list <- append(mo.list, rep(k, length(mo.percent)))
+      mo.perc.list <- append(mo.perc.list, mo.percent)
+      loc.list2 <- append(loc.list2, rep(i, length(mo.percent)))
+    }
+  }
+}
+
+yr.perc2 <- data.frame(loc.list1, yr.list1, 
+                      yr.above.list, yr.total.list,
+                      yr.perc.list)
+mo.perc2 <- data.frame(loc.list2, yr.list2, mo.list, 
+                      mo.above.list, mo.total.list,
+                      mo.perc.list)
+
+yr.perc2.ag1 <- aggregate(yr.above.list ~ loc.list1, data = yr.perc2, sum)
+yr.perc2.ag2 <- aggregate(yr.total.list ~ loc.list1, data = yr.perc2, sum)
+
+```
+
+
+```{r DetMicFigure, fig.cap = "Annual percent detectable microcystins (> 0.15 ug/L; grey) and percent above proposed EPA limit (4 ug/L; red)."}
+
+# Merge data frames for detected and above limit
+
+dat2 <- merge(yr.perc,yr.perc2, by = c("loc.list1","yr.list1"))
+dat2 <- dat2[,c(1,2,5,8)]
+colnames(dat2) <- c("MonitoringLocationIdentifier", "Year", "DetMic", "WHOMic")
+
+#m1 <- melt(dat2, ids = c("MonitoringLocationIdentifier", "Year"))
+#head(m1)
+
+p = ggplot(data = dat2, aes(Year, DetMic)) +
+  scale_x_discrete(breaks = c(2005,2007,2009,2011,2013,2015)) + 
+  geom_bar(stat = "identity") +
+  geom_bar(data = dat2, aes(Year,WHOMic), 
+           stat = "identity", col = "white",fill = "red") +
+  facet_wrap(~MonitoringLocationIdentifier, ncol = 2) +
+  ylab("Percent Detected")
+print(p)
+
+#ggsave(paste("./supporting-files/mic-trends.pdf"), plot = p, scale = 1,
+       width = 7.5, height = 6, units = "in")
+
+```
+
+
+### Observations
+Microcystin variants (> 0.15 ug/L) were detected in `r round((sum(yr.ag1[,2])/sum(yr.ag2[,2])*100), digits = 2)` of samples collected during the May-September sampling seasons in Pawnee, Fremont, and Carter Lakes between 2005-2015.
+
+1. Between 2005 and 2015, microcystin variants were detected in `r round((sum(yr.ag1[3:4,2])/sum(yr.ag2[3:4,2])*100), digits = 2)`% of samples collected from Pawnee Lake during seasonal sampling between May and September (n = `r sum(yr.ag2[3:4,2])`). Of these, `r round((sum(yr.perc2.ag1[3:4,2])/sum(yr.perc2.ag2[3:4,2])*100), digits = 2)`% were greater than the WHO limit. 
+2. Between 2005 and 2015, microcystin variants were detected in `r round((sum(yr.ag1[1:2,2])/sum(yr.ag2[1:2,2])*100), digits = 2)`% of samples collected from Fremont Lake during seasonal sampling between May and September (n = `r sum(yr.ag2[1:2,2])`). Of these, `r round((sum(yr.perc2.ag1[1:2,2])/sum(yr.perc2.ag2[1:2,2])*100), digits = 2)`% were greater than the WHO limit. 
+3. Between 2005 and 2015, microcystin variants were detected in `r round((sum(yr.ag1[5,2])/sum(yr.ag2[5,2])*100), digits = 2)`% of samples collected from Carter Lake during seasonal sampling between May and September (n = `r sum(yr.ag2[5,2])`). Of these, `r round((sum(yr.perc2.ag1[5,2])/sum(yr.perc2.ag2[5,2])*100), digits = 2)`% were greater than the WHO limit.  
+
+
+\clearpage
+
+####Monthly trends between 2005-2009
+
+```{r, fig.height = 8}
+mos = c("05","06","07","08","09")
+
+bmp = bmp[bmp$mo %in% mos,]
+
+yrs = c("2006","2007","2008","2009")
+bmp = bmp[bmp$yr.fac %in% yrs,]
+
+bmp.paw <- bmp[grep("PAW", bmp$MonitoringLocationIdentifier),]
+bmp.fre <- bmp[grep("FRM", bmp$MonitoringLocationIdentifier),]
+bmp.car <- bmp[grep("CAR", bmp$MonitoringLocationIdentifier),]
+
+
+seasonal.paw = ggplot(bmp.paw, aes(mo,ResultMeasureValue, 
+                      shape = yr.fac, col = yr.fac)) +
+  ylim(0,80) +
+  geom_hline(yintercept = 4, col = "red", lty = 1, lwd = 1) +
+  geom_jitter(cex = 1, col = "grey50", width = 0.2, height = 0.1)  +
+  stat_summary(fun.data = "mean_cl_boot", color = "black", size = 1) +
+  xlab("Month") + ylab(expression(paste("Microcystin Concentration (", mu,"g/L)"))) +
+  annotate("text", y = Inf, x = Inf, label = "Pawnee Lake", vjust = 2, hjust = 1.25) +
+  guides(shape = guide_legend(title = "Year"))
+
+#print(seasonal.paw)
+
+# PreAlum = black; postAlum = "grey"
+seasonal.fre = ggplot(bmp.fre, aes(mo,ResultMeasureValue, 
+                      shape = yr.fac, col = yr.fac)) +
+  ylim(0,80) +
+  #scale_x_continuous(breaks = c(2005:2015)) +
+  geom_hline(yintercept = 4, col = "red", lty = 1, lwd = 1) +
+  geom_jitter(cex = 1, col = "grey50", width = 0.2, height = 0.1)  +
+  stat_summary(fun.data = "mean_cl_boot", color = "black", size = 1) +
+  xlab("Month") + ylab(expression(paste("Microcystin Concentration (", mu,"g/L)"))) +
+  annotate("text", y = Inf, x = Inf, label = "Fremont Lake No. 20", vjust = 2, hjust = 1.15) +
+  guides(shape = guide_legend(title = "Year"))
+
+#print(seasonal.fre)
+
+seasonal.car = ggplot(bmp.car, aes(mo,ResultMeasureValue, 
+                      shape = yr.fac, col = yr.fac)) +
+  ylim(0,50) +
+  #scale_x_continuous(breaks = c(05:09), labels = c("May", "Jun","Jul","Aug", "Sept"), guide = guide_legend(title = "Year")) +
+  geom_hline(yintercept = 4, col = "red", lty = 1, lwd = 1) +
+  geom_jitter(cex = 1, col = "grey50", width = 0.2, height = 0.1) +
+  stat_summary(fun.data = "mean_cl_boot", color = "black", size = 1) +
+  xlab("Month") + ylab(expression(paste("Microcystin Concentration (", mu,"g/L)"))) +
+  annotate("text", y = Inf, x = Inf, label = "Carter Lake", vjust = 2, hjust = 1.25) +
+  guides(shape = guide_legend(title = "Year"))
+
+#print(seaonsal.car)
+
+grid.arrange(seasonal.paw,seasonal.fre, seasonal.car, ncol = 1)
+
+# statistics should control for variation between years and treatment
+
+```
+
+```{r, eval = FALSE}
+grid.arrange(annual.paw,seasonal.paw,annual.fre,seasonal.fre,annual.car,seasonal.car, nrow = 3)
+
+ggsave("./supporting-files/annualPaw4yr.pdf", annual.paw, 
+       height = 2.5, width = 5, units = "in", scale = 1.5)
+ggsave("./supporting-files/annualFre4yr.pdf", annual.fre, 
+       height = 2.5, width = 5, units = "in", scale = 1.5)
+ggsave("./supporting-files/annualCar4yr.pdf", annual.car, 
+       height = 2.5, width = 5, units = "in", scale = 1.5)
+ggsave("./supporting-files/seasonalPaw.pdf", seasonal.paw, 
+       height = 2.5, width = 5, units = "in", scale = 1.5)
+ggsave("./supporting-files/seasonalFre.pdf", seasonal.fre, 
+       height = 2.5, width = 5, units = "in", scale = 1.5)
+ggsave("./supporting-files/seasonalCar.pdf", seasonal.car, 
+       height = 2.5, width = 5, units = "in", scale = 1.5)
+
+```
+
+
+\clearpage
+
+```{r DetMicFigureMonth, fig.cap = "Monthly percent detectable microcystins (grey) and percent above WHO limit (red) between 2006-2009.", fig.height = 8}
+
+# Merge data frames for detected and above limit
+
+dat2 <- merge(mo.perc,mo.perc2, by = c("loc.list2","yr.list2","mo.list"))
+dat2 <- dat2[,c(1,2,3,6,9)]
+colnames(dat2) <- c("MonitoringLocationIdentifier", "Year", "Month", "DetMic", "WHOMic")
+
+#m1 <- melt(dat2, ids = c("MonitoringLocationIdentifier", "Year"))
+#head(m1)
+
+p = ggplot(data = dat2, aes(Month, DetMic)) +
+  geom_bar(stat = "identity") +
+  geom_bar(data = dat2, aes(Month,WHOMic), 
+           stat = "identity", col = "white",fill = "red") +
+  facet_grid(Year~MonitoringLocationIdentifier) +
+  ylab("Percent Detected")
+print(p)
+
+```
+
+\clearpage
+
+#### Weekly sampling between 2005-2009
+
+```{r, fig.height = 8}
+
+bmp.paw <- bmp.paw[bmp.paw$yr <=2007,]
+bmp.fre <- bmp.fre[bmp.fre$yr <=2007,]
+bmp.car <- bmp.car[bmp.car$yr <=2007,]
+
+wkly.seasonal.paw = ggplot(bmp.paw, aes(wk,ResultMeasureValue)) +
+  ylim(0,80) +
+  #geom_hline(yintercept = 20, col = "red", lty = 1, lwd = 1) +
+  stat_summary(fun.data = "mean_cl_boot", size = 1, geom = "line") +
+  geom_point(cex = 1, col = "grey50", width = 0.2, height = 0.1)  +
+  xlab("Week") + 
+  ylab(expression(paste("Microcystin Concentration (", mu,"g/L)"))) +
+  annotate("text", y = Inf, x = Inf, label = "Pawnee Lake", vjust = 2, hjust = 1.25)+
+  guides(col = guide_legend(title = "Year"))
+
+#print(seasonal.paw)
+
+# PreAlum = black; postAlum = "grey"
+wkly.seasonal.fre = ggplot(bmp.fre, aes(wk,ResultMeasureValue)) +
+  ylim(0,80) +
+  #geom_hline(yintercept = 20, col = "red", lty = 1, lwd = 1) +
+  stat_summary(fun.data = "mean_cl_boot", size = 1, geom = "line") +
+  geom_point(cex = 1, col = "grey50", width = 0.2, height = 0.1)  +
+  xlab("Week") + 
+  ylab(expression(paste("Microcystin Concentration (", mu,"g/L)"))) +
+  annotate("text", y = Inf, x = Inf, label = "Fremont Lake No. 20", vjust = 2, hjust = 1.15)+
+  guides(col = guide_legend(title = "Year"))
+
+#print(seasonal.fre)
+
+wkly.seasonal.car = ggplot(bmp.car, aes(wk,ResultMeasureValue)) +
+  ylim(0,50) +
+  #geom_hline(yintercept = 20, col = "red", lty = 1, lwd = 1) +
+  stat_summary(fun.data = "mean_cl_boot", size = 1, geom = "line") +
+  geom_point(cex = 1, col = "grey50", width = 0.2, height = 0.1)  +
+  xlab("Week") + 
+  ylab(expression(paste("Microcystin Concentration (", mu,"g/L)"))) +
+  annotate("text", y = Inf, x = Inf, label = "Carter Lake", vjust = 2, hjust = 1.25)+
+  guides(col = guide_legend(title = "Year"))
+
+#print(seaonsal.car)
+
+grid.arrange(wkly.seasonal.paw,wkly.seasonal.fre, wkly.seasonal.car, ncol = 1)
+
+# statistics should control for variation between years and treatment
+
+```
+
+\clearpage
+
+### Statistics
+** Does the microcystin concentration change throughout the season?
+```{r}
+# use RMANOVA twith month nested within the year
+
+fit.paw.lme <- lme(ResultMeasureValue ~ wk, random = ~ 1 | yr,
+            correlation=corAR1(form = ~ 1 | yr),
+            data = bmp.paw, na.action = "na.omit")
+summary(fit.paw.lme)
+anova(fit.paw.lme)
+
+fit.fre.lme <- lme(ResultMeasureValue ~ wk, random = ~ 1 | yr,
+            correlation=corAR1(form = ~ 1 | yr),
+            data = bmp.fre, na.action = "na.omit")
+summary(fit.fre.lme)
+anova(fit.fre.lme)
+
+fit.car.lme <- lme(ResultMeasureValue ~ wk, random = ~ 1 | yr,
+            correlation=corAR1(form = ~ 1 | yr),
+            data = bmp.car, na.action = "na.omit")
+summary(fit.car.lme)
+anova(fit.car.lme)
+
+```
+
+\clearpage
+
+## LCMS data
+
+```{r wsl-data-import}
+wscmic <- read.csv("./data/wsc_toxindata.csv", header = T)
+#str(wscmic)
+
+wscmic[is.na(wscmic)] <-0
+
+# Remove WSL QA/QC data
+wscmic <- wscmic[-grep("LFM",wscmic$Sample_ID),]
+wscmic <- wscmic[-grep("LD2",wscmic$Sample_ID),]
+
+#remove samples without a location ID
+wscmic <- wscmic[grep("21NEB001",wscmic$MonitoringLocationIdentifier),]
+
+# subset data
+wscmic <- wscmic[,c(2,4:14)]
+
+#wscmic$Microcystin.total <- rowSums(wscmic[,8:12])
+```
+
+```{r crossreactivity}
+#corrected = uncorrected LC/MS/MS concentration (ug/l)*ELISA cross-reactivity correction
+
+wscmic$mcla <- wscmic$Microcystin.LA*.48
+wscmic$mclf <- wscmic$Microcystin.LF*.72
+wscmic$mclr <- wscmic$Microcystin.LR
+wscmic$mclw <- wscmic$Microcystin.LW*1.02
+wscmic$mcrr <- wscmic$Microcystin.RR*.53
+wscmic$mc.total.cor <- rowSums(wscmic[,13:17])
+
+wscmic$tmp <- as.Date(wscmic$Collection_Date, format = "%Y-%m-%d")
+wscmic$yr <- as.factor(format(wscmic$tmp,'%Y'))                      
+wscmic$mo <- as.factor(format(wscmic$tmp,'%m'))
+#wscmic$jul.dat <- yday(wscmic$tmp)
+wscmic$wk <- week(wscmic$tmp)
+
+
+#write.csv(wscmic, "./supporting-files/20161019_wscmic-trimmed.csv", row.names = FALSE)
+```
+
+```{r}
+
+# Convert time 
+require(reshape2)
+m <- melt(wscmic, ids = c("lake","Collection_Date"))
+
+
+# subset data to only include BMP stations
+sta <- c("21NEB001_WQX-LLP2PAWNEE03","21NEB001_WQX-LLP2PAWNEE05",
+         "21NEB001_WQX-LLP1FRMT2004","21NEB001_WQX-LLP1FRMT2005",
+         "21NEB001_WQX-LMT1CARTER03")
+
+m <- m[m$MonitoringLocationIdentifier %in% sta,]
+
+m$lake <- droplevels(m$lake)
+
+m1 <- m[grep("mc.",m$variable),]
+m1$jul.dat <- yday(m1$Collection_Date)
+
+p1 = ggplot(m1, aes(jul.dat, value, col = variable, shape = yr)) +
+  geom_hline(yintercept = 20, col = "red", lty = 1, lwd = 1) +
+  geom_point(cex = 2) +
+  scale_color_grey() +
+  xlab("Julian date") + ylab("Concentration (ug/L)") +
+  facet_wrap(~MonitoringLocationIdentifier, ncol = 2, scales = "free_y")
+
+print(p1)
+
+
+comp.paw <- m1[grep("PAWNEE",m1$MonitoringLocationIdentifier),]
+comp.fre <- m1[grep("FRMT",m1$MonitoringLocationIdentifier),]
+comp.car <- m1[grep("CAR",m1$MonitoringLocationIdentifier),]
+
+p = ggplot(comp.paw[comp.paw$variable != "mc.total.cor",], 
+       aes(jul.dat, value, fill = variable)) +
+  geom_area(position = "stack") +
+  xlim(min(m1$jul.dat),max(m1$jul.dat)) +
+  xlab("Julian Date") + ylab(expression(paste("Microcystin Concentration (", mu,"g/L)"))) +
+  facet_wrap(MonitoringLocationIdentifier~yr)
+
+#print(p)
+
+p1 <- ggplot(comp.fre[comp.fre$variable != "mc.total.cor",], 
+       aes(jul.dat, value, fill = variable)) +
+  geom_area(position = "stack") +
+  xlim(min(m1$jul.dat),max(m1$jul.dat)) +
+  xlab("Julian Date") + ylab(expression(paste("Microcystin Concentration (", mu,"g/L)"))) +
+  facet_wrap(MonitoringLocationIdentifier~yr)
+
+p2 <- ggplot(comp.car[comp.car$variable != "mc.total.cor",], 
+       aes(jul.dat, value, fill = variable)) +
+  geom_area(position = "stack") +
+  xlim(min(m1$jul.dat),max(m1$jul.dat)) +
+  xlab("Julian Date") + ylab(expression(paste("Microcystin Concentration (", mu,"g/L)"))) +
+  facet_wrap(MonitoringLocationIdentifier~yr)
+
+```
+
+
+```{r}
+p2 = ggplot(m1, aes(jul.dat, value, col = variable, shape = yr)) +
+  geom_hline(yintercept = 20, col = "red", lty = 1, lwd = 1) +
+  geom_point(cex = 2) +
+  scale_color_grey() +
+  geom_point(data = m1[m1$variable == "Microcystin.total",],
+             aes(jul.dat,value, shape = yr), pch = 20, col = "red", cex = 3) +
+  xlab("Julian date") + ylab(expression(paste("Concentration (",mu,"g/L)"))) +
+  ylim(0,20)+
+  facet_wrap(~lake, ncol = 2, scales = "free_y")
+
+
+#p2$data$lake <- factor(p2$data$lake, levels = c("PAWNEE WEST","PAWNEE EAST","FREMONT WEST","FREMONT EAST","CARTER"))
+
+#print(p2)
+
+#grid.arrange(p1,p2)
+```
+
+## Method comparision
+
+```{r, fig.height=4,fig.width=4,fig.cap="Relationship between total microcystin concentration as measured by LC/MS/MS and ELISA (n = 110). Total microcystin concentrations measured via LC/MS/MS were calculated by summing the cross-reactivity corrected concentration of each microcystin congener."}
+
+dat <- dat[dat$CharacteristicName == "Microcystin",]
+
+mic.merge <- merge(dat,wscmic, 
+                   by.x = c("MonitoringLocationIdentifier","tmp"), 
+                   by.y = c("MonitoringLocationIdentifier","Collection_Date"))
+
+#mic.merge2 <- mic.merge2[,c(1,2,9,35,36,37,38,67,68,69,70,72,73,74,80,81,82,83,84,85,86)]
+
+# with log scaling, remove data below detection limit
+p1 = ggplot(mic.merge[mic.merge$ResultMeasureValue >=0.15,], aes(x = mc.total.cor, y = ResultMeasureValue)) +
+ annotation_logticks(base = 10, sides = "bl", scaled = TRUE, 
+                      short = unit(0.1, "cm"), 
+                      mid = unit(0.2, "cm"), 
+                      long = unit(0.3, "cm"), 
+                      colour = "black", size = 0.5, 
+                      linetype = 1, alpha = 1, color = "grey25") +
+  scale_y_log10(breaks = c(0.01,0.1,1,10,100), labels = c(0.01,0.1,1,10,100)) +
+  scale_x_log10(breaks = c(0.01,0.1,1,10,100), labels = c(0.01,0.1,1,10,100)) +
+  geom_abline(intercept = 0, slope = 1, col = "black", lwd = 1, lty = 1) +
+  geom_point(cex = 3) +
+  xlab(expression(paste("Log10 Total Corrected Microcystin by LC - MS/MS (", mu,"g/L)"))) +
+  ylab(expression(paste("Log10 Total Microcystin by ELISA (" , mu,"g/L)"))) +
+  annotate("text",x = 145, y = 100,label = "1:1", col = "black") +
+  annotate("text", x = Inf, y = Inf, label = "p = 0.011", vjust = 2, hjust = 1.25)
+
+print(p1)
+
+#ggsave("./supporting-files/FigS2Correlation.pdf", p1, units = "in", height = 3, width = 3, scale = 2)
+
+#length(mic.merge$mc.total.cor[mic.merge$mc.total.cor >0])/length(mic.merge$mc.total.cor)
+#Only 20% (19.8) of samples had comparible microcystin concencentrations; 80% of those samples contained microcystins via ELISA suggesting microcystin congeners other than the most common five variants in the samples
+
+p2 = ggplot(mic.merge[mic.merge$mc.total.cor >0,], aes(x = mc.total.cor, y = ResultMeasureValue, col = lake, shape = lake)) +
+  scale_x_log10()+
+  scale_y_log10() +
+  geom_abline(intercept = 0, slope = 1, col = "red", lwd = 1, lty = 1) +
+  geom_point(cex = 2) +
+  xlab("Total Corrected Microcystin by LC/MS/MS (ug/L)") +
+  ylab("Total Microcystin by ELISA (ug/L)")
+
+#print(p2)
+
+#cor(mic.merge$mc.total.cor, mic.merge$mic.con, method = "spearman")
+#install.packages("psych"");corr.test()
+mc.merge.stats <- mic.merge[mic.merge$ResultMeasureValue >=0.15,]
+cortest <- cor.test(mc.merge.stats$mc.total.cor, mc.merge.stats$ResultMeasureValue, method = "pearson", conf.level = 0.95)
+cortest
+```
+
+LCMS and ELISA are significantly correlated (t = `r cortest[[1]]`,df = `r cortest[[2]]` ,p = `r cortest[[3]]`) following cross-reactivity correction (Loftin et al 2008).
+
+```{r, include = FALSE}
+# This is the old data set
+
+ndeqmic <- read.csv("./data/ndeq_toxindata.csv", header = T)
+#str(ndeqmic)
+
+
+ndeqmic$tmp <- as.Date(ndeqmic$sample.date, format = "%Y-%m-%d")
+ndeqmic$yr <- as.factor(format(ndeqmic$tmp,'%Y'))                      
+ndeqmic$jul.dat <- yday(ndeqmic$tmp)
+
+ndeqmic <- ndeqmic[-grep(">", ndeqmic$mic.con),]
+ndeqmic$mic.con <- as.numeric(as.character(ndeqmic$mic.con))
+
+p = ggplot(ndeqmic, aes(jul.dat,mic.con, col = yr)) +
+  geom_hline(yintercept = 20, col = "red", lty = 1, lwd = 1) +
+  geom_point(cex = 2) +
+  scale_color_grey() +
+  xlab("Julian date") + ylab("Microcystin Concentration (ug/l)") +
+  facet_wrap(~lake, ncol = 2)
+#p$data$lake <- factor(p$data$lake, levels = c("PAWNEE WEST","PAWNEE EAST","FREMONT WEST", "FREMONT EAST","CARTER"))
+
+#print(p)
+
+```
+
+```{r, fig.height=4,fig.width=4,fig.cap="Relationship between total microcystin concentration as measured by LC/MS/MS and ELISA (n = 110). Total microcystin concentrations measured via LC/MS/MS were calculated by summing the cross-reactivity corrected concentration of each microcystin congener.", include = FALSE}
+#Merge data from NDEQ and WSC
+mic.merge <- merge(ndeqmic,wscmic, 
+                  by.x = c("lake","sample.date"), 
+                   by.y = c("lake","Collection_Date"), all = T)
+
+p1 = ggplot(mic.merge, aes(x = mc.total.cor, y = mic.con)) +
+  scale_x_log10() +
+  scale_y_log10() +
+  geom_abline(intercept = 0, slope = 1, col = "black", lwd = 1, lty = 1) +
+  geom_point(cex = 3) +
+  xlab(expression(paste("Total Corrected Microcystin by LC - MS/MS (", mu,"g/L)"))) +
+  ylab(expression(paste("Total Microcystin by ELISA (" , mu,"g/L)"))) +
+  annotate("text",x = 145, y = 100,label = "1:1", col = "black") +
+  annotate("text", x = 0.01, y = 100, label = "Stats")
+
+print(p1)
+
+ggsave("./supporting-files/FigS2Correlation.pdf", p1, units = "in", height = 3, width = 3, scale = 2)
+
+p2 = ggplot(mic.merge[mic.merge$mc.total.cor >0,], aes(x = mc.total.cor, y = mic.con, col = lake, shape = lake)) +
+  scale_x_log10()+
+  scale_y_log10() +
+  geom_abline(intercept = 0, slope = 1, col = "red", lwd = 1, lty = 1) +
+  geom_point(cex = 2) +
+  xlab("Total Corrected Microcystin by LC/MS/MS (ug/L)") +
+  ylab("Total Microcystin by ELISA (ug/L)")
+
+#print(p2)
+
+#cor(mic.merge$mc.total.cor, mic.merge$mic.con, method = "spearman")
+cortest <- cor.test(mic.merge$mc.total.cor, mic.merge$mic.con, method = "spearman", conf.level = 0.95)
+```
+
+```{r, eval = FALSE, include = FALSE}
+
+#length(mic.merge$mc.total.cor[mic.merge$mc.total.cor <0.1])
+#length(mic.merge$mc.total.cor)
+
+
+int <- mic.merge[mic.merge$ResultMeasureValue < 10 & mic.merge$mc.total.cor > 25,c("lake","ActivityStartDate","ResultMeasureValue","mc.total.cor","Anatoxin.A","Cylindrospermopsin","Saxitoxin")]
+
+int <- mic.merge[mic.merge$mc.total.cor > 0,c("lake","ActivityStartDate","ResultMeasureValue","mc.total.cor","Anatoxin.A","Cylindrospermopsin","Saxitoxin")]
+
+#int <- cbind(int[,1:3],int[,12],int[,4:6])
+colnames(int) <- c("Lake","Sample Date","ELISA MIC","LC/MS/MS MIC","ATX", "CYL", "SAX")
+
+row.names(int) <- NULL
+int <- na.omit(int)
+pander(int)
+```
+\newpage
+
+## Other algal toxins
+```{r}
+toxins <- c("Anatoxin.A", "Cylindrospermopsin","Saxtoxin")
+
+m2 <- m[toxins %in% m$variable]
+
+lvls <- read.csv("./data/state_regs.csv", header = T)
+lvls <- lvls[3:5,3:4]
+lvls$toxin <- c("Anatoxin.A","Cylindrospermopsin","Saxitoxin")
+
+p1 = ggplot(m2[m2$value >0,], aes(mo, value, shape = yr)) +
+  #geom_hline(data = lvls, yintercept = lvls$PHA, lwd = 1)+
+  #geom_hline(data = lvls, yintercept = lvls$NCA, lwd = 2)+
+  geom_point(cex = 2) +
+  scale_color_discrete(c("red","blue","green"))+
+  xlab("Month") + ylab(expression(paste("Cyanotoxin Concentration (", mu,"g/L)"))) +
+  facet_grid(~variable, scales = "free_y") 
+
+#print(p1)
+
+p2 = ggplot(m2[m2$value >0,], aes(jul.dat, value, col = yr, shape = lake)) +
+  geom_point(cex = 2) +
+  scale_color_discrete(c("red","blue","green")) +
+  xlab("Julian date") + ylab("Concentration (ug/L)") +
+  ylim(0,15)+
+  facet_grid(~variable, scales = "free_y")
+
+#print(p2)
+
+
+p3 = ggplot(m2[m2$value > 0,], aes(jul.dat, value, col = yr, shape = lake)) +
+  geom_point(cex = 2) +
+  scale_color_discrete(c("red","blue","green")) +
+  xlab("Julian date") + ylab("Concentration (ug/L)") +
+  ylim(0,1)+
+  facet_grid(~variable, scales = "free_y")
+
+#print(p3)
+
+#grid.arrange(p1,p2,p3)
+
+```
+
+1. The State of Nebraska only monitors the concentration of microcystins as an aggregate group and issues health advisories for recreational water bodies as a total toxin concentrations greater than 20 ug/L. 
+Other states issue both public health advisories (PHA) and no contact advisories (NCA) depending on the type of cyanobacterial toxin. 
+For example, Ohio regularly tracks microcystin-LR, anatoxin-a, saxitoxin, and cylindrospermopsin and issues both PHA and NCA throughout the season (Table 1, next page).
+2. **Anatoxin a**: 
+The reporting limit for our method is; 
+`r length(m2$value[m2$variable == "Anatoxin.A" & m2$value >= 0.01])` samples (~ `r round(length(m2$value[m2$variable == "Anatoxin.A" & m2$value >= 0.01])/length(m2$value[m2$variable == "Anatoxin.A"]) * 100, digits = 1)` %) contained an a reportable anatoxin concentration (mean =`r round(mean(m2$value[m2$variable == "Anatoxin.A"]), digits = 1)` ug/L). 
+The OH PHA advisory for anatoxin a is 80 ug/L; 
+In this study, `r length(m2$value[m2$variable == "Anatoxin.A" & m2$value >= 80])` samples (~ `r round(length(m2$value[m2$variable == "Anatoxin.A" & m2$value >= 80])/length(m2$value[m2$variable == "Anatoxin.A"]) * 100, digits = 1)` %) contained an anatoxin concentration greater than the PHA advisory (mean =`r round(mean(m2$value[m2$variable == "Anatoxin.A"]), digits = 1)` ug/L). 
+The OH NCA advisory is 300 ug/L; 
+In these samples, `r length(m2$value[m2$variable == "Anatoxin.A" & m2$value >=300])` samples (~ `r round(length(m2$value[m2$variable == "Anatoxin.A" & m2$value >= 300])/length(m2$value[m2$variable == "Anatoxin.A"]) * 100, digits = 1)` %) contained an anatoxin concentration greater than the NCA advisory.
+3. **Cylindrospermopsin**: The OH PHA advisory for cylindrospermopsin is 5 ug/L; 
+In this study, `r length(m2$value[m2$variable == "Cylindrospermopsin" & m2$value >=5])` samples (~ `r round(length(m2$value[m2$variable == "Cylindrospermopsin" & m2$value >= 5])/length(m2$value[m2$variable == "Cylindrospermopsin"]) * 100, digits =1)` %) contained a cylindrospermopsin concentration greater than the PHA advisory (mean = `r round(mean(m2$value[m2$variable == "Cylindrospermopsin"]),digits = 1)` ug/L). 
+The OH NCA advisory for cylindrospermopsin is 20 ug/L; 
+In these samples, `r length(m2$value[m2$variable == "Cylindrospermopsin" & m2$value >=20])` samples (~ `r round(length(m2$value[m2$variable == "Cylindrospermopsin" & m2$value >= 20])/length(m2$value[m2$variable == "Cylindrospermopsin"]) * 100, digits = 1)` %) contained a cylindrospermopsin concentration greater than the NCA advisory.
+4. **Saxitoxin**: The OH PHA advisory for saxitoin is 0.8 ug/L; 
+In this study, `r length(m2$value[m2$variable == "Saxitoxin" & m2$value >=0.8])` samples (~ `r round(length(m2$value[m2$variable == "Saxitoxin" & m2$value >= 0.8])/length(m2$value[m2$variable == "Saxitoxin"]) * 100, digits = 1)` %) contained a saxitoxin concentration greater than the PHA advisory (mean = `r round(mean(m2$value[m2$variable == "Saxitoxin"]), digits = 1)` ug/L). 
+The OH NCA advisory for saxitoin is 3 ug/L; 
+In these samples, `r length(m2$value[m2$variable == "Saxitoxin" & m2$value >=3])` samples (~ `r round(length(m2$value[m2$variable == "Saxitoxin" & m2$value >= 3])/length(m2$value[m2$variable == "Saxitoxin"]) * 100, digits = 1)` %) contained a saxitoxin concentration greater than the NCA advisory.
+
+\newpage
+```{r}
+regs <- read.csv("./data/state_regs.csv", header = TRUE)
+
+require(pander)
+set.caption("Selected state regulations for cyanotoxins.PHA = Personal Health Advisory; NCA = No Contact Advisory")
+pander(regs)
+```
+
+
+
+
+# Results: Climatic and environmental data by lake system
+
+## Climatic, environmental, and biological data sets
+*Are there environmental parameters responsible for microcystin production?*
+```{r}
+# Read in data table
+
+# Make pander table
+
+# Save table
+```
+
+
+```{r LoadEnvData}
+### ENVIRONMENTAL ###
+# 'dat' data file contains all the environmental information needed for the analysis
+dat <- read.csv("./data/result.csv", header = TRUE)
+
+# Do some data cleanup for this analysis
+
+dat$ResultMeasureValue <- as.numeric(as.character(dat$ResultMeasureValue))
+
+## Convert ActivityStartDate to a Juilan value to look at annual and decadal patterns
+require(lubridate)
+require(ggplot2)
+
+dat$tmp <- as.Date(dat$ActivityStartDate, format = "%Y-%m-%d") #Converts data to date structure
+dat$yr <- as.numeric(format(dat$tmp,'%Y'))         #Time is 
+dat$yr.fac <- as.factor(as.numeric(format(dat$tmp,'%Y')))         #Time is now numeric
+dat$mo <- as.factor(format(dat$tmp,'%m'))
+dat$jul.dat <- yday(dat$tmp)                                  #Time is now in Julian
+dat$wk <- week(dat$tmp)
+
+```
+
+```{r LoadClimData}
+### CLIMATIC ###
+noaa.dat <- read.csv("./data/noaa_data.csv", header = TRUE)
+
+## Add time dimensions to the data set
+noaa.dat$DATE <- as.factor(noaa.dat$DATE)
+noaa.dat$tmp <- as.Date(noaa.dat$DATE, format = "%Y%m%d")
+noaa.dat$yr <- as.numeric(format(noaa.dat$tmp,'%Y'))  
+noaa.dat$yr.fac <- as.factor(as.numeric(format(noaa.dat$tmp,'%Y')))
+noaa.dat$mo <- as.factor(format(noaa.dat$tmp,'%m'))
+noaa.dat$wk <- week(noaa.dat$tmp)
+noaa.dat$jul.dat <- yday(noaa.dat$tmp)
+
+## Trim up data set to include only data through 2015
+noaa.dat <- noaa.dat[noaa.dat$yr <=2015 & noaa.dat$yr >=2005,]
+#noaa.dat <- noaa.dat[-grep("EMERALD",noaa.dat$STATION_NAME),]
+```
+
+\newpage
+
+## Pawnee Lake
+```{r PawEnv}
+paw.dat <- dat[grep("PAW",dat$MonitoringLocationIdentifier),]
+paw.dat$MonitoringLake <- "PAWNEE"
+
+#unique(paw.dat$OrganizationIdentifier)
+#unique(paw.dat$yr)
+
+## Focus on data collected between 2005 to 2015
+paw.dat <- paw.dat[paw.dat$yr >= 2005 & paw.dat$yr < 2010,]
+
+## Data now needs to be reshaped to merge environmental and climate data
+
+## Pull out appropriate columns
+vars <- c("tmp", "yr.fac","mo", "wk", "CharacteristicName", "ResultMeasureValue", "ActivityDepthHeightMeasure.MeasureValue","OrganizationIdentifier","ProjectIdentifier","MonitoringLocationIdentifier")
+
+## Select Environmental Parameters of interest
+
+env.parm <- c("Microcystin" ,"Alkalinity, total","Aluminum","Ammonia-nitrogen","Chlorophyll a",
+          "Chlorophyll a (probe)","Depth","Depth, Secchi disk depth","Dissolved oxygen (DO)","Inorganic nitrogen (nitrate and nitrite)",
+          "pH","Phosphorus","Orthophosphate","Specific conductance","Temperature, water",
+          "Total suspended solids", "Turbidity","Kjeldahl nitrogen")
+
+# Subset the data frames for surface (< 0.1m) and depth profiles
+paw.dat2 <- paw.dat[,vars]
+paw.dat2$wk.fac <- as.factor(paw.dat2$wk)
+paw.dat2$CharacteristicName <- as.character(paw.dat2$CharacteristicName)
+
+paw.dat2 <- paw.dat2[paw.dat2$CharacteristicName %in% env.parm,]
+paw.dat2$ActivityDepthHeightMeasure.MeasureValue[is.na(paw.dat2$ActivityDepthHeightMeasure.MeasureValue)] <- 0
+
+```
+
+```{r PawWaterColumn}
+#unique(paw.dat2$MonitoringLocationIdentifier); unique(paw.dat2$CharacteristicName)
+
+paw.dat2$jul.dat <- yday(paw.dat2$tmp)
+
+parms.exclude = c("Depth, Secchi disk depth", "Depth","Aluminum", "Microcystin", "Chlorophyll a")
+parms.test = c("Chlorophyll a (probe)","Dissolved oxygen (DO)", "Temperature, water","Kjeldahl nitrogen")
+paw.dat.wtc <- paw.dat2[paw.dat2$CharacteristicName %in% parms.test,]
+
+p <- ggplot(data = paw.dat2, 
+            aes(x = tmp, y = ActivityDepthHeightMeasure.MeasureValue)) +
+  geom_point() +
+  scale_y_reverse() + 
+  ylab("Lake Depth (m)") +
+  xlab("Date") +
+  facet_grid(CharacteristicName~MonitoringLocationIdentifier, scales = "free_y")
+
+p$data$MonitoringLocationIdentifier <- factor(p$data$MonitoringLocationIdentifier, levels = c("COEOMAHA_WQX-PAWLKND1","COEOMAHA_WQX-PAWLKML1","COEOMAHA_WQX-PAWLKUP1"))
+
+print(p)
+
+
+
+
+p1 = ggplot(data = paw.dat.wtc[paw.dat.wtc$CharacteristicName == "Temperature, water",],
+       aes(x = jul.dat, y = ActivityDepthHeightMeasure.MeasureValue)) +
+  geom_point() +
+  scale_y_reverse() + 
+  ylab("Lake Depth (m)") +
+  xlab("Date") +
+  facet_grid(yr.fac~MonitoringLocationIdentifier, scales = "free_y")
+
+p1$data$MonitoringLocationIdentifier <- factor(p1$data$MonitoringLocationIdentifier, levels = c("COEOMAHA_WQX-PAWLKND1","COEOMAHA_WQX-PAWLKML1","COEOMAHA_WQX-PAWLKUP1"))
+
+print(p1)
+
+p2 = ggplot(data = paw.dat.wtc[paw.dat.wtc$CharacteristicName == "Temperature, water" & paw.dat.wtc$ActivityDepthHeightMeasure.MeasureValue<0.5,],
+       aes(x = wk, y = ResultMeasureValue)) +
+  geom_point() +
+  ylab("Water Temperature (Deg C)") +
+  xlab("Date") 
+#+
+ # facet_grid(yr.fac~MonitoringLocationIdentifier, scales = "free_y")
+
+p2$data$MonitoringLocationIdentifier <- factor(p1$data$MonitoringLocationIdentifier, levels = c("COEOMAHA_WQX-PAWLKND1","COEOMAHA_WQX-PAWLKML1","COEOMAHA_WQX-PAWLKUP1"))
+
+print(p2)
+
+
+
+```
+
+\newpage
+
+```{r}
+# Print a new plot for each variable's depth profile...
+
+mic = ggplot(data = paw.dat2[paw.dat2$CharacteristicName == "Microcystin" &paw.dat2$OrganizationIdentifier == "21NEB001_WQX" ,],
+       aes(x = jul.dat, y = ResultMeasureValue)) +
+  geom_path() +
+  geom_point(color="white", size = 1) +
+  geom_point(color = "black", size = 0.8)+
+  ylab("Total Microcystin (ug/L)") +
+  xlab("Date") +
+  facet_grid(yr.fac~MonitoringLocationIdentifier, scales = "free_y")
+
+print(mic)
+
+```
+
+```{r PawEpi}
+# Evaluate just the data in the epilimnion
+paw.epi <- paw.dat2[paw.dat2$ActivityDepthHeightMeasure.MeasureValue <= 0.5 ,]
+paw.epi$yr.fac <- factor(paw.epi$yr.fac)
+paw.epi$mo <- factor(paw.epi$mo)
+
+
+# a first look at parameters within the epilimnion
+
+p <- ggplot(data = paw.epi, aes(tmp, ResultMeasureValue)) +
+  geom_point() +
+  facet_wrap(~ CharacteristicName, scales = "free_y")
+print(p)
+
+
+## To merge data sets, first separate by projects then remerge
+#paw.dat.ndeq <- paw.dat2[paw.dat2$OrganizationIdentifier != "COEOMAHA_WQX",]
+#paw.dat.ndeq <- paw.dat.ndeq[,c(1:4,6,10)]
+#colnames(paw.dat.ndeq) <- c("tmp","yr.fac","mo","wk","Microcystin","wk.fac")
+
+paw.dat.coe <- paw.epi
+## COE data only 2005-2009
+paw.dat.coe <- paw.dat.coe[,-1]
+
+require(reshape)
+paw.dat.coe.reshape <- melt(paw.dat.coe)
+paw.dat.coe.reshape <- paw.dat.coe.reshape[paw.dat.coe.reshape$variable == "ResultMeasureValue",]
+#paw.dat.coe.reshape <- na.omit(paw.dat.coe.reshape)
+
+# Evaluate the dataset for missing values using length of dataset
+paw.dat.coe.reshape2 <- cast(data = paw.dat.coe.reshape, yr.fac + wk.fac ~ CharacteristicName)
+
+# use cast function to add values to datafile
+paw.dat.coe.reshape2 <- cast(data = paw.dat.coe.reshape, yr.fac + wk.fac ~ CharacteristicName, fill = "NA", add.missing = TRUE, fun.aggregate = mean)
+
+#paw.dat.coe.reshape2 <- dcast(data = paw.dat.coe.reshape, yr.fac + wk.fac ~ CharacteristicName, value.var = paw.dat.coe.reshape$value, fill = "NA", drop = TRUE, fun.aggregate = mean)
+
+
+# Final Pawnee environmental dataset
+paw.dat.final <- paw.dat.coe.reshape2
+head(paw.dat.final)
+str(paw.dat.final)
+
+# Function to convert factors to numeric data
+as.numeric.factor <- function(x) {as.numeric(levels(x))[x]}
+
+yr <- as.numeric.factor(paw.dat.final$yr.fac)
+wk <- as.numeric.factor(paw.dat.final$wk.fac)
+
+paw.dat.final <- cbind(yr,wk,sapply(paw.dat.final[,3:19],as.numeric.factor))
+
+# Can also evalutate correlation between parameters
+#install.packages("corrplot)")
+#require(corrplot)
+#cor1 <- cor(paw.dat.final[,3:ncol(paw.dat.final)])
+
+```
+
+**Environmental data summary**
+The Army Corp of Enginners (Omaha, NE) collected data on the Pawnee Lake Reservoir between 2005 and 2009. Of the `r length(unique(paw.dat$CharacteristicName))-1` parameters available, we selected `r length(env.parm)-1` collected at the surface (< 0.1 m) for our analysis of microcystin trends (NDEQ) in Pawnee Lake.
+
+```{r EnvParmTable}
+require(pander)
+EnvParmTable <- data.frame(paw.dat$OrganizationIdentifier[paw.dat$CharacteristicName %in% env.parm],
+                           paw.dat$CharacteristicName[paw.dat$CharacteristicName %in% env.parm],
+                           paw.dat$ResultMeasure.MeasureUnitCode[paw.dat$CharacteristicName %in% env.parm],
+                           paw.dat$MethodDescriptionText[paw.dat$CharacteristicName %in% env.parm]
+                           ,row.names = NULL)
+
+EnvParmTable <- EnvParmTable[!duplicated(EnvParmTable),]
+#EnvParmTable <- EnvParmTable[-c(1,12),]
+row.names(EnvParmTable) <- NULL
+colnames(EnvParmTable) <- c("Organization","Characteristic","Unit of Measure","Method URL")
+
+set.caption("Selected variables for analysis")
+set.alignment("left")
+pander(EnvParmTable)
+```
+
+```{r PawNoaa}
+## Select local data from 2005-2009
+noaa.dat.paw <- noaa.dat[grep("LINCOLN",noaa.dat$STATION_NAME),]
+noaa.dat.paw <- noaa.dat.paw[noaa.dat.paw$yr >= 2005 & noaa.dat.paw$yr <= 2009,]
+
+noaa.dat.paw <- noaa.dat.paw[,c(7,17,22,32,37,42,212:217)]
+noaa.dat.paw$mo.fac <- as.factor(noaa.dat.paw$mo)
+noaa.dat.paw$wk.fac <- as.factor(noaa.dat.paw$wk)
+noaa.dat.paw.reshape <- melt(noaa.dat.paw, ids=c("yr.fac","mo.fac","wk.fac"))
+
+envs <- c("PRCP","SNOW","TSUN","TMAX","TMIN","WESD")
+noaa.dat.paw.reshape <- noaa.dat.paw.reshape[noaa.dat.paw.reshape$variable %in% envs,]
+
+noaa.dat.paw.reshape$value[noaa.dat.paw.reshape$value == -9999] <- NA
+#noaa.dat.paw.reshape <- na.omit(noaa.dat.paw.reshape)
+
+require(reshape)
+# calculate wkly average precipitation, cloud cover
+noaa.dat.paw <- cast(noaa.dat.paw.reshape, yr.fac + wk.fac ~ variable, mean)
+head(noaa.dat.paw)
+
+```
+
+**NOAA Climatic data**
+```{r NOAATable}
+NOAATable <- data.frame(c("Preciptation","Snowfall","Time with sun","Max Temperature","Min Temperature","Water Equivalent Snow"), colnames(noaa.dat.paw)[3:8],c("in","in","minutes","deg C", "deg C", "in"))
+colnames(NOAATable) <-c("Measure", "Abbrevation","Unit")
+
+set.caption("Climatic variables")
+set.alignment('left')
+pander(NOAATable)
+```
+
+```{r, SamplingMap}
+# Set spatial boundaries
+
+# Read bathymetry data
+
+# Make lake plot
+
+# Plot sampling points
+
+# Save map
+
+```
+
+
+\clearpage
+
+
+```{r PawMerge}
+# Merge data sets by year and week to have complete multivariate set
+paw.dat.merged <- merge(paw.dat.final, noaa.dat.paw, by.x = c("yr","wk"), by.y = c("yr.fac","wk.fac"))
+
+#Check the structure of the data set
+str(paw.dat.merged)
+
+# merge the LCMS data with the above dataset
+paw.lcms <- mic.merge[grep("PAW",mic.merge$lake),]
+paw.lcms <- paw.lcms[,c("lake","yr.y","wk","mcla","mclf","mclr","mclw","mcrr")]
+paw.lcms[,"yr.y"] <- as.numeric.factor(paw.lcms[,"yr.y"]) 
+
+# remember there are 2 data points per sample for the east and west beach
+paw.dat.merged2 <- merge(paw.dat.merged,paw.lcms, by.x = c("yr","wk"), by.y = c("yr.y","wk"), all = T)
+
+#Subset to the 2006-2009 years
+paw.dat.merged3 <- paw.dat.merged2[paw.dat.merged$yr != "2005",]
+paw.dat.merged3 <- paw.dat.merged3[,-22]
+
+```
+
+```{r PawMultivariateStats}
+# For the initial analysis, remove microcystin composition
+paw.dat4 <- paw.dat.merged3[,1:(ncol(paw.dat.merged3)-5)]
+paw.dat5 <- melt(paw.dat4, id = c("yr","wk","Microcystin"))
+paw.dat5 <- na.omit(paw.dat5)
+ggplot(data = paw.dat5, aes(x = value, y = Microcystin, col = yr)) +
+  geom_point()+
+  facet_wrap(~variable, scales = "free_x")
+
+paw.dat5 <- melt(paw.dat4, id = c("yr","wk"))
+paw.dat5 <- na.omit(paw.dat5)
+paw.dat5$value <- as.numeric(paw.dat5$value)
+ggplot(data = paw.dat5, aes(x = yr, y = value, col = wk)) +
+  stat_summary(fun.data = "mean_cl_boot")+
+  facet_wrap(~variable, scales = "free_y")
+```
+\newpage
+
+## Fremont Lake
+```{r FreEnv}
+fre.dat <- dat[grep("FRMT",dat$MonitoringLocationIdentifier),]
+fre.dat$MonitoringLake <- "FREMONT"
+
+## Substantial amount of duplication in dataset, needs to be removed and/or addressed. Maybe at different sampling depths?
+
+#unique(fre.dat$OrganizationIdentifier)
+#unique(fre.dat$yr)
+
+## Focus on data collected between 2005 to 2015
+fre.dat <- fre.dat[fre.dat$yr >= 2005 & fre.dat$yr < 2010,]
+
+## Data now needs to be reshaped to merge environmental and climate data
+
+## Pull out appropriate columns
+vars <- c("tmp", "yr.fac","mo", "wk", "CharacteristicName", "ResultMeasureValue","ResultMeasure.MeasureUnitCode", "ActivityDepthHeightMeasure.MeasureValue","OrganizationIdentifier","ProjectIdentifier","MonitoringLocationIdentifier")
+
+## Select Environmental Parameters of interest; this list will be different than Pawnee
+
+env.parm <- c("Microcystin" ,"Alkalinity","Aluminum", "Ammonia-nitrogen","Chlorophyll a",
+          "Depth, bottom","Depth, Secchi disk depth","Dissolved oxygen (DO)","Inorganic nitrogen (nitrate and nitrite)","Nitrate & Nitrite",
+          "pH","Phosphate-phosphorus","Orthophosphate","Specific conductance","Temperature, water",
+          "Total suspended solids", "Turbidity","Kjeldahl nitrogen", "Total Nitrogen","Total Phosphorus")
+
+# Subset the data frames for surface (< 0.1m) and depth profiles
+fre.dat2 <- fre.dat[,vars]
+fre.dat2$wk.fac <- as.factor(fre.dat2$wk)
+fre.dat2$CharacteristicName <- as.character(fre.dat2$CharacteristicName)
+
+fre.dat2 <- fre.dat2[fre.dat2$CharacteristicName %in% env.parm,]
+fre.dat2$ActivityDepthHeightMeasure.MeasureValue[is.na(fre.dat2$ActivityDepthHeightMeasure.MeasureValue)] <- 0
+fre.epi <- fre.dat2[fre.dat2$ActivityDepthHeightMeasure.MeasureValue <= 0.1 ,]
+fre.epi$yr.fac <- factor(fre.epi$yr.fac)
+fre.epi$mo <- factor(fre.epi$mo)
+
+fre.epi <- na.omit(fre.epi)
+
+# a first look at parameters
+
+p <- ggplot(data = fre.epi, aes(tmp, ResultMeasureValue)) +
+  geom_point() +
+  facet_wrap(~ CharacteristicName, scales = "free_y")
+print(p)
+
+
+## To merge data sets, first separate by projects then remerge
+#fre.dat.ndeq <- fre.dat2[fre.dat2$OrganizationIdentifier != "COEOMAHA_WQX",]
+#fre.dat.ndeq <- fre.dat.ndeq[,c(1:4,6,10)]
+#colnames(fre.dat.ndeq) <- c("tmp","yr.fac","mo","wk","Microcystin","wk.fac")
+
+fre.dat.coe <- fre.epi
+## COE data only 2005-2009
+fre.dat.coe <- fre.dat.coe[,-1]
+
+require(reshape)
+fre.dat.coe.reshape <- melt(fre.dat.coe)
+fre.dat.coe.reshape <- fre.dat.coe.reshape[fre.dat.coe.reshape$variable == "ResultMeasureValue",]
+#fre.dat.coe.reshape <- na.omit(fre.dat.coe.reshape)
+
+# Evaluate the dataset for missing values using length of dataset
+fre.dat.coe.reshape2 <- cast(data = fre.dat.coe.reshape, yr.fac + wk.fac ~ CharacteristicName)
+
+# use cast function to add values to datafile
+fre.dat.coe.reshape2 <- cast(data = fre.dat.coe.reshape, yr.fac + wk.fac ~ CharacteristicName, fill = "NA", add.missing = TRUE, fun.aggregate = mean)
+
+#fre.dat.coe.reshape2 <- dcast(data = fre.dat.coe.reshape, yr.fac + wk.fac ~ CharacteristicName, value.var = fre.dat.coe.reshape$value, fill = "NA", drop = TRUE, fun.aggregate = mean)
+
+
+# Final Fremont environmental dataset
+fre.dat.final <- fre.dat.coe.reshape2
+head(fre.dat.final)
+str(fre.dat.final)
+
+# Function to convert factors to numeric data
+as.numeric.factor <- function(x) {as.numeric(levels(x))[x]}
+
+yr <- as.numeric.factor(fre.dat.final$yr.fac)
+wk <- as.numeric.factor(fre.dat.final$wk.fac)
+
+fre.dat.final <- cbind(yr,wk,sapply(fre.dat.final[,3:19],as.numeric.factor))
+
+# Can also evalutate correlation between parameters
+#install.packages("corrplot)")
+#require(corrplot)
+#cor1 <- cor(fre.dat.final[,3:ncol(fre.dat.final)])
+
+```
+
+```{r EnvParmTableFRMT}
+require(pander)
+EnvParmTable <- data.frame(fre.dat$OrganizationIdentifier[fre.dat$CharacteristicName %in% env.parm],
+                           fre.dat$CharacteristicName[fre.dat$CharacteristicName %in% env.parm],
+                           fre.dat$ResultMeasure.MeasureUnitCode[fre.dat$CharacteristicName %in% env.parm],
+                           fre.dat$MethodDescriptionText[fre.dat$CharacteristicName %in% env.parm]
+                           ,row.names = NULL)
+
+EnvParmTable <- EnvParmTable[!duplicated(EnvParmTable),]
+#EnvParmTable <- EnvParmTable[-c(1,12),]
+row.names(EnvParmTable) <- NULL
+colnames(EnvParmTable) <- c("Organization","Characteristic","Unit of Measure","Method URL")
+
+set.caption("Selected variables for analysis")
+set.alignment("left")
+pander(EnvParmTable)
+```
