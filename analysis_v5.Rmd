@@ -77,26 +77,45 @@ require(ggplot2);require(gridExtra);require(pander);require(reshape2)
 theme_std <- function (base_size = 12, base_family = "") 
 {
     theme_grey(base_size = base_size, base_family = base_family) %+replace% 
-        theme(axis.text = element_text(size = rel(0.8)), 
-              axis.ticks = element_line(colour = "black"), 
+        theme(axis.ticks = element_line(colour = "black"), 
               legend.key = element_rect(colour = "grey80"), 
               panel.background = element_rect(fill = "white", colour = NA), 
               panel.border = element_rect(fill = NA, colour = "grey50"), 
               panel.grid.major = element_line(NA), 
               panel.grid.minor = element_line(NA), 
-              strip.background = element_rect(fill = "grey80", colour = "grey50", size = 0.2))
+              strip.background = element_rect(fill = "grey80", colour = "grey50", size = 0.2),
+              axis.text  = element_text(size=rel(1.25)),
+              axis.title = element_text(colour="black", size=rel(1.5),
+                                    margin = margin(20,25,15,15), face = "bold"),
+              strip.text = element_text(size = rel(1.5), colour = "black", face = "bold")
+        )
 }
 
 theme_set(theme_std())
+
+test.plot <- ggplot(mtcars, aes(x = hp , y = mpg)) +
+  geom_point()
+print(test.plot)
 
 ```
 
 # Materials and Methods
 ## Lake descriptions
+```{r, eval = FALSE}
+# Inset Map
+pdf("./supporting-files/FigS1-Inset.pdf")
+map("state", col = "grey", boundary = TRUE,  lty = 2)
+map("worldHires","USA", xlim = c(-130,-65), ylim = c(25,50), 
+    col = "black", boundary = TRUE, add = TRUE)
+map("state","Nebraska", col = "grey", fill = TRUE, add = TRUE) 
+points(x=-96.318667,y=41.084526, pch = 15, col = "red")
+dev.off()
+```
+
 ```{r}
 require(ggmap)
 # Load sample points
-ndeq.stn <- read.csv("./data/ndeq_station.csv", header = TRUE)
+#ndeq.stn <- read.csv("./data/ndeq_station.csv", header = TRUE)
 smp.points <- read.csv("./data/sitedescriptions.csv")
 noaa.dat <- read.csv("./data/noaa_data.csv", header = TRUE)
 
@@ -177,18 +196,6 @@ bmp <- bmp[bmp$yr != 2004,]
 
 # detection limit is 0.15, change all values less than 0.15 to 0
 bmp$ResultMeasureValue[bmp$ResultMeasureValue <0.15] <- 0
-```
-
-
-```{r, include = FALSE}
-# Inset Map
-pdf("./supporting-files/FigS1-Inset.pdf")
-map("state", col = "grey", boundary = TRUE,  lty = 2)
-map("worldHires","USA", xlim = c(-130,-65), ylim = c(25,50), 
-    col = "black", boundary = TRUE, add = TRUE)
-map("state","Nebraska", col = "grey", fill = TRUE, add = TRUE) 
-points(x=-96.318667,y=41.084526, pch = 15, col = "red")
-dev.off()
 ```
 
 \clearpage
@@ -389,6 +396,8 @@ for(i in unique(bmp$MonitoringLocationIdentifier)){
 yr.perc <- data.frame(loc.list1, yr.list1, yr.above.list, yr.total.list,yr.perc.list)
 mo.perc <- data.frame(loc.list2, yr.list2, mo.list, 
                       mo.above.list, mo.total.list,mo.perc.list)
+
+# information summary 
 yr.ag1 <- aggregate(yr.above.list ~ loc.list1, data = yr.perc, sum)
 yr.ag2 <- aggregate(yr.total.list ~ loc.list1, data = yr.perc, sum)
 
@@ -506,20 +515,20 @@ for(i in unique(bmp$MonitoringLocationIdentifier)){
   }
 }
 
-yr.perc2 <- data.frame(loc.list1, yr.list1, 
+yr.perc3 <- data.frame(loc.list1, yr.list1, 
                       yr.above.list, yr.total.list,
                       yr.perc.list)
-mo.perc2 <- data.frame(loc.list2, yr.list2, mo.list, 
+mo.perc3 <- data.frame(loc.list2, yr.list2, mo.list, 
                       mo.above.list, mo.total.list,
                       mo.perc.list)
 
-yr.perc2.ag1 <- aggregate(yr.above.list ~ loc.list1, data = yr.perc2, sum)
-yr.perc2.ag2 <- aggregate(yr.total.list ~ loc.list1, data = yr.perc2, sum)
+yr.perc3.ag1 <- aggregate(yr.above.list ~ loc.list1, data = yr.perc3, sum)
+yr.perc3.ag2 <- aggregate(yr.total.list ~ loc.list1, data = yr.perc3, sum)
 
 ```
 
 
-```{r DetMicFigure, fig.cap = "Annual percent detectable microcystins (> 0.15 ug/L; grey) and percent above proposed EPA limit (4 ug/L; red)."}
+```{r DetMicFigure, fig.cap = "Annual percent detectable microcystins (> 0.15 ug/L; grey) and percent above proposed EPA limit (20 ug/L; red)."}
 
 # Merge data frames for detected and above limit
 
@@ -540,7 +549,7 @@ p = ggplot(data = dat2, aes(Year, DetMic)) +
 print(p)
 
 #ggsave(paste("./supporting-files/mic-trends.pdf"), plot = p, scale = 1,
-       width = 7.5, height = 6, units = "in")
+#       width = 7.5, height = 6, units = "in")
 
 ```
 
@@ -548,9 +557,9 @@ print(p)
 ### Observations
 Microcystin variants (> 0.15 ug/L) were detected in `r round((sum(yr.ag1[,2])/sum(yr.ag2[,2])*100), digits = 2)` of samples collected during the May-September sampling seasons in Pawnee, Fremont, and Carter Lakes between 2005-2015.
 
-1. Between 2005 and 2015, microcystin variants were detected in `r round((sum(yr.ag1[3:4,2])/sum(yr.ag2[3:4,2])*100), digits = 2)`% of samples collected from Pawnee Lake during seasonal sampling between May and September (n = `r sum(yr.ag2[3:4,2])`). Of these, `r round((sum(yr.perc2.ag1[3:4,2])/sum(yr.perc2.ag2[3:4,2])*100), digits = 2)`% were greater than the WHO limit. 
-2. Between 2005 and 2015, microcystin variants were detected in `r round((sum(yr.ag1[1:2,2])/sum(yr.ag2[1:2,2])*100), digits = 2)`% of samples collected from Fremont Lake during seasonal sampling between May and September (n = `r sum(yr.ag2[1:2,2])`). Of these, `r round((sum(yr.perc2.ag1[1:2,2])/sum(yr.perc2.ag2[1:2,2])*100), digits = 2)`% were greater than the WHO limit. 
-3. Between 2005 and 2015, microcystin variants were detected in `r round((sum(yr.ag1[5,2])/sum(yr.ag2[5,2])*100), digits = 2)`% of samples collected from Carter Lake during seasonal sampling between May and September (n = `r sum(yr.ag2[5,2])`). Of these, `r round((sum(yr.perc2.ag1[5,2])/sum(yr.perc2.ag2[5,2])*100), digits = 2)`% were greater than the WHO limit.  
+1. Between 2005 and 2015, microcystin variants were detected in `r round((sum(yr.ag1[3:4,2])/sum(yr.ag2[3:4,2])*100), digits = 2)`% of samples collected from Pawnee Lake during seasonal sampling between May and September (n = `r sum(yr.ag2[3:4,2])`). Of these, `r round((sum(yr.perc2.ag1[3:4,2])/sum(yr.perc2.ag2[3:4,2])*100), digits = 2)`% exceeded the WHO microcystin exposure limit of 20 \mu g/L and `r round((sum(yr.perc3.ag1[3:4,2])/sum(yr.perc3.ag2[3:4,2])*100), digits = 2)`% exceeded the new recommended limit at 4 \mu g/L. 
+2. Between 2005 and 2015, microcystin variants were detected in `r round((sum(yr.ag1[1:2,2])/sum(yr.ag2[1:2,2])*100), digits = 2)`% of samples collected from Fremont Lake during seasonal sampling between May and September (n = `r sum(yr.ag2[1:2,2])`). Of these, `r round((sum(yr.perc2.ag1[1:2,2])/sum(yr.perc2.ag2[1:2,2])*100), digits = 2)`% were greater than the WHO limit and `r round((sum(yr.perc3.ag1[1:2,2])/sum(yr.perc3.ag2[1:2,2])*100), digits = 2)`% exceeded the new recommended limit at 4 \mu g/L. 
+3. Between 2005 and 2015, microcystin variants were detected in `r round((sum(yr.ag1[5,2])/sum(yr.ag2[5,2])*100), digits = 2)`% of samples collected from Carter Lake during seasonal sampling between May and September (n = `r sum(yr.ag2[5,2])`). Of these, `r round((sum(yr.perc2.ag1[5,2])/sum(yr.perc2.ag2[5,2])*100), digits = 2)`% were greater than the WHO limit and `r round((sum(yr.perc3.ag1[5,2])/sum(yr.perc3.ag2[5,2])*100), digits = 2)`% exceeded the new recommended limit at 4 \mu g/L.  
 
 
 \clearpage
@@ -913,7 +922,7 @@ cortest
 
 LCMS and ELISA are significantly correlated (t = `r cortest[[1]]`,df = `r cortest[[2]]` ,p = `r cortest[[3]]`) following cross-reactivity correction (Loftin et al 2008).
 
-```{r, include = FALSE}
+```{r, eval = FALSE}
 # This is the old data set
 
 ndeqmic <- read.csv("./data/ndeq_toxindata.csv", header = T)
@@ -939,7 +948,7 @@ p = ggplot(ndeqmic, aes(jul.dat,mic.con, col = yr)) +
 
 ```
 
-```{r, fig.height=4,fig.width=4,fig.cap="Relationship between total microcystin concentration as measured by LC/MS/MS and ELISA (n = 110). Total microcystin concentrations measured via LC/MS/MS were calculated by summing the cross-reactivity corrected concentration of each microcystin congener.", include = FALSE}
+```{r, fig.height=4,fig.width=4,fig.cap="Relationship between total microcystin concentration as measured by LC/MS/MS and ELISA (n = 110). Total microcystin concentrations measured via LC/MS/MS were calculated by summing the cross-reactivity corrected concentration of each microcystin congener.", eval = FALSE}
 #Merge data from NDEQ and WSC
 mic.merge <- merge(ndeqmic,wscmic, 
                   by.x = c("lake","sample.date"), 
