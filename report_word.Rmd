@@ -1,0 +1,32 @@
+---
+title: Seasonal and annual trends in cyanotoxins within eastern Nebraskan lakes
+subtitle: A case study from three hydromorphically different lakes
+output: 
+ word_document:
+    highlight: tango
+    fig_caption: yes
+geometry: margin=0.75in
+fontsize: 11pt
+---
+
+**Megan L. Larsen** and Daniel D. Snow 
+
+*University of Nebraska-Lincoln Water Sciences Laboratory*
+
+1840 N. 37th Street
+
+Lincoln, Nebraska USA 68583-0844
+
+This analysis has been prepared in conjunction with our manuscript for THIS JOURNAL
+
+Data analysis for this project was completed with `r sessionInfo()$R.version$version.string`.
+
+\clearpage
+
+```{r}
+require(pander)
+smp.points <- read.csv("./data/sitedescriptions.csv")
+stations.table <- smp.points[,c("OrganizationFormalName","LakeName","MonitoringLocationIdentifier","LatitudeMeasure","LongitudeMeasure")]
+colnames(stations.table)<-c("Organization","Lake","Location ID","Latitude","Longitude")
+pander(stations.table)
+```
