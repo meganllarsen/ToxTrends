@@ -87,7 +87,7 @@ theme_std <- function (base_size = 12, base_family = "")
               axis.text  = element_text(size=rel(1.25)),
               axis.title = element_text(colour="black", size=rel(1.5),
                                     margin = margin(20,25,15,15), face = "bold"),
-              strip.text = element_text(size = rel(1.5), colour = "black", face = "bold")
+              strip.text = element_text(size = rel(1.15), colour = "black", face = "bold")
         )
 }
 
@@ -152,6 +152,7 @@ Contributing agencies, the data type, and sampling station location are describe
 stations.table <- smp.points[,c("OrganizationFormalName","LakeName","MonitoringLocationIdentifier","LatitudeMeasure","LongitudeMeasure")]
 colnames(stations.table)<-c("Organization","Lake","Location ID","Latitude","Longitude")
 pander(stations.table)
+write.table(stations.table, file = "./supporting-files/Table_stationslist.txt", sep = ",", quote = FALSE, row.names = FALSE)
 ```
 
 Prior to the start of any comparisons within or across lakes, we first cleaned-up the dataset by ensuring parameter units were equivalent... The ELISA -adda kit has a lower reporting limit of 0.15 therefore any reported value less than 0.15 \mu g/L were converted to 0 \mu g/L 
@@ -230,37 +231,38 @@ bmp.car <- bmp[grep("CAR", bmp$MonitoringLocationIdentifier),]
 
 annual.paw = ggplot(bmp.paw, aes(yr,ResultMeasureValue)) +
   ylim(0,80) +
-  scale_x_continuous(breaks = c(2005:2015)) +
+  scale_x_continuous(breaks = c(2005,2007,2009,2011,2013,2015)) +
   geom_hline(yintercept = 20, col = "red", lty = 1, lwd = 1) +
-  geom_hline(yintercept = 4, col = "black", lty = 1, lwd = 1) +
+  #geom_hline(yintercept = 4, col = "black", lty = 1, lwd = 1) +
   geom_jitter(cex = 1, col = "grey50", width = 0.2, height = 0.1)  +
   stat_summary(fun.data = "mean_cl_boot", color = "black", size = 1) +
-  xlab("Year") + ylab(expression(paste("Microcystin Concentration (", mu,"g/L)"))) +
+  xlab("Year") + theme(axis.title.y = element_blank()) +
   annotate("text", y = Inf, x = Inf, label = "Pawnee Lake", vjust = 2, hjust = 1.25)
 
 #print(annual.paw)
 
 annual.fre = ggplot(bmp.fre, aes(yr,ResultMeasureValue)) +
   ylim(0,80) +
-  scale_x_continuous(breaks = c(2005:2015)) +
+  scale_x_continuous(breaks = c(2005,2007,2009,2011,2013,2015)) +
   geom_hline(yintercept = 20, col = "red", lty = 1, lwd = 1) +
-  geom_hline(yintercept = 4, col = "black", lty = 1, lwd = 1) +
+  #geom_hline(yintercept = 4, col = "black", lty = 1, lwd = 1) +
   geom_jitter(cex = 1, col = "grey50", width = 0.2, height = 0.1)  +
   stat_summary(fun.data = "mean_cl_boot", color = "black", size = 1) +
-  xlab("Year") + ylab(expression(paste("Microcystin Concentration (", mu,"g/L)"))) +
+  xlab("Year") + theme(axis.title.y = element_blank()) +
   annotate("text", y = Inf, x = Inf, label = "Fremont Lake No. 20", vjust = 2, hjust = 1.15)
 
 #print(annual.fre)
 
 annual.car = ggplot(bmp.car, aes(yr,ResultMeasureValue)) +
-  ylim(0,50) +
-  scale_x_continuous(breaks = c(2005:2015)) +
+  ylim(0,80) +
+  scale_x_continuous(breaks = c(2005,2007,2009,2011,2013,2015)) +
   geom_hline(yintercept = 20, col = "red", lty = 1, lwd = 1) +
-  geom_hline(yintercept = 4, col = "black", lty = 1, lwd = 1) +
+  #geom_hline(yintercept = 4, col = "black", lty = 1, lwd = 1) +
   geom_jitter(cex = 1, col = "grey50", width = 0.2, height = 0.1) +
   stat_summary(fun.data = "mean_cl_boot", color = "black", size = 1) +
-  xlab("Year") + ylab(expression(paste("Microcystin Concentration (", mu,"g/L)"))) +
-  annotate("text", y = Inf, x = Inf, label = "Carter Lake", vjust = 2, hjust = 1.25)
+  xlab("Year") +
+  annotate("text", y = Inf, x = Inf, label = "Carter Lake", vjust = 2, hjust = 1.25)+
+  theme(axis.title.y = element_blank())
 
 #print(annual.car)
 
@@ -545,11 +547,15 @@ p = ggplot(data = dat2, aes(Year, DetMic)) +
   geom_bar(data = dat2, aes(Year,WHOMic), 
            stat = "identity", col = "white",fill = "red") +
   facet_wrap(~MonitoringLocationIdentifier, ncol = 2) +
-  ylab("Percent Detected")
+  ylab("Percent Detected") +
+  theme(strip.text = element_text(size = rel(1.15), colour = "black"))
+
+#p$data$MonitoringLocationIdentifier <- factor()
+
 print(p)
 
-#ggsave(paste("./supporting-files/mic-trends.pdf"), plot = p, scale = 1,
-#       width = 7.5, height = 6, units = "in")
+#ggsave(paste("./supporting-files/mic-trends.tiff"), plot = p, scale = 1.5,
+#       width = 6, height = 6, units = "in", resolution(300))
 
 ```
 
@@ -573,23 +579,69 @@ bmp = bmp[bmp$mo %in% mos,]
 
 yrs = c("2006","2007","2008","2009")
 bmp = bmp[bmp$yr.fac %in% yrs,]
+bmp$mo <- droplevels(bmp$mo)
+levels(bmp$mo) <-c("May","Jun","Jul","Aug","Sep")
 
 bmp.paw <- bmp[grep("PAW", bmp$MonitoringLocationIdentifier),]
 bmp.fre <- bmp[grep("FRM", bmp$MonitoringLocationIdentifier),]
 bmp.car <- bmp[grep("CAR", bmp$MonitoringLocationIdentifier),]
 
 
-seasonal.paw = ggplot(bmp.paw, aes(mo,ResultMeasureValue, 
-                      shape = yr.fac, col = yr.fac)) +
+seasonal.paw.yr = ggplot(bmp.paw, aes(yr.fac,ResultMeasureValue, fill=mo)) +
+  geom_hline(yintercept = 20, col = "red", lty = 1, lwd = 1) +
+  geom_hline(yintercept = 4, col = "grey", lty = 3, lwd = 1) +
+  #geom_point(cex = 1, col = "grey50")  +
   ylim(0,80) +
-  geom_hline(yintercept = 4, col = "red", lty = 1, lwd = 1) +
-  geom_jitter(cex = 1, col = "grey50", width = 0.2, height = 0.1)  +
-  stat_summary(fun.data = "mean_cl_boot", color = "black", size = 1) +
-  xlab("Month") + ylab(expression(paste("Microcystin Concentration (", mu,"g/L)"))) +
+  geom_boxplot(position = position_dodge(width = .9))+
+  #stat_summary(fun.data = "mean_cl_boot", color = "black", size = 1) +
+  xlab("Year") + ylab(expression(paste("Microcystin Concentration (", mu,"g/L)"))) +
   annotate("text", y = Inf, x = Inf, label = "Pawnee Lake", vjust = 2, hjust = 1.25) +
-  guides(shape = guide_legend(title = "Year"))
+  guides(fill = guide_legend(title = "Month"))+
+  scale_fill_grey(start = 0.2, end = 0.9)+
+  geom_hline(yintercept = 20, col = "red", lty = 1, lwd = 1) +
+  geom_hline(yintercept = 4, col = "grey", lty = 3, lwd = 1)
+print(seasonal.paw.yr)
+
+seasonal.paw.mo = ggplot(bmp.paw, aes(mo,ResultMeasureValue, fill=yr.fac)) +
+  geom_hline(yintercept = 20, col = "red", lty = 1, lwd = 1) +
+  geom_hline(yintercept = 4, col = "grey", lty = 3, lwd = 1) +
+  geom_point(cex = 1, col = "grey50",position = position_dodge(width = 0.9))  +
+  ylim(0,80) +
+  geom_boxplot(position = position_dodge(width = .9), alpha = 0.2)+
+  #stat_summary(fun.data = "mean_cl_boot", color = "black", size = 1) +
+  xlab("Year") + ylab(expression(paste("Microcystin Concentration (", mu,"g/L)"))) +
+  annotate("text", y = Inf, x = Inf, label = "Pawnee Lake", vjust = 2, hjust = 1.25) +
+  guides(fill = guide_legend(title = "Year"))+
+  scale_color_grey()
 
 #print(seasonal.paw)
+
+seasonal.fre.yr = ggplot(bmp.fre, aes(yr.fac,ResultMeasureValue, fill=mo)) +
+  geom_hline(yintercept = 20, col = "red", lty = 1, lwd = 1) +
+  geom_hline(yintercept = 4, col = "grey", lty = 3, lwd = 1) +
+  #geom_point(cex = 1, col = "grey50")  +
+  ylim(0,80) +
+  geom_boxplot(position = position_dodge(width = .9))+
+  #stat_summary(fun.data = "mean_cl_boot", color = "black", size = 1) +
+  xlab("Year") + ylab(expression(paste("Microcystin Concentration (", mu,"g/L)"))) +
+  annotate("text", y = Inf, x = Inf, label = "Fremont Lake No. 20", vjust = 2, hjust = 1.15) +
+  guides(fill = guide_legend(title = "Month"))+
+  scale_fill_grey(start = 0.2, end = 0.9)+
+  geom_hline(yintercept = 20, col = "red", lty = 1, lwd = 1) +
+  geom_hline(yintercept = 4, col = "grey", lty = 3, lwd = 1)
+
+seasonal.fre.mo = ggplot(bmp.fre, aes(mo,ResultMeasureValue, fill=yr.fac)) +
+  geom_hline(yintercept = 20, col = "red", lty = 1, lwd = 1) +
+  geom_hline(yintercept = 4, col = "grey", lty = 3, lwd = 1) +
+  geom_point(cex = 1, col = "grey50",position = position_dodge(width = 0.9))  +
+  ylim(0,80) +
+  geom_boxplot(position = position_dodge(width = .9), alpha = 0.2)+
+  #stat_summary(fun.data = "mean_cl_boot", color = "black", size = 1) +
+  xlab("Year") + ylab(expression(paste("Microcystin Concentration (", mu,"g/L)"))) +
+  annotate("text", y = Inf, x = Inf, label = "Fremont Lake No. 20", vjust = 2, hjust = 1.15) +
+  guides(fill = guide_legend(title = "Year"))+
+  scale_color_grey()
+
 
 # PreAlum = black; postAlum = "grey"
 seasonal.fre = ggplot(bmp.fre, aes(mo,ResultMeasureValue, 
@@ -605,6 +657,30 @@ seasonal.fre = ggplot(bmp.fre, aes(mo,ResultMeasureValue,
 
 #print(seasonal.fre)
 
+seasonal.car.yr = ggplot(bmp.car, aes(yr.fac,ResultMeasureValue, fill=mo)) +
+  #geom_point(cex = 1, col = "grey50")  +
+  ylim(0,80) +
+  geom_boxplot(position = position_dodge(width = .9))+
+  #stat_summary(fun.data = "mean_cl_boot", color = "black", size = 1) +
+  xlab("Year") + ylab(expression(paste("Microcystin Concentration (", mu,"g/L)"))) +
+  annotate("text", y = Inf, x = Inf, label = "Carter Lake", vjust = 2, hjust = 1.25) +
+  guides(fill = guide_legend(title = "Month"))+
+  scale_fill_grey(start = 0.2, end = 0.9)+
+  geom_hline(yintercept = 20, col = "red", lty = 1, lwd = 1) +
+  geom_hline(yintercept = 4, col = "grey", lty = 3, lwd = 1)
+
+seasonal.car.mo = ggplot(bmp.car, aes(mo,ResultMeasureValue, fill=yr.fac)) +
+  geom_hline(yintercept = 20, col = "red", lty = 1, lwd = 1) +
+  geom_hline(yintercept = 4, col = "grey", lty = 3, lwd = 1) +
+  geom_point(cex = 1, col = "grey50",position = position_dodge(width = 0.9))  +
+  ylim(0,80) +
+  geom_boxplot(position = position_dodge(width = .9), alpha = 0.2)+
+  #stat_summary(fun.data = "mean_cl_boot", color = "black", size = 1) +
+  xlab("Year") + ylab(expression(paste("Microcystin Concentration (", mu,"g/L)"))) +
+  annotate("text", y = Inf, x = Inf, label = "Carter Lake", vjust = 2, hjust = 1.25) +
+  guides(fill = guide_legend(title = "Year"))+
+  scale_color_grey()
+
 seasonal.car = ggplot(bmp.car, aes(mo,ResultMeasureValue, 
                       shape = yr.fac, col = yr.fac)) +
   ylim(0,50) +
@@ -618,7 +694,14 @@ seasonal.car = ggplot(bmp.car, aes(mo,ResultMeasureValue,
 
 #print(seaonsal.car)
 
-grid.arrange(seasonal.paw,seasonal.fre, seasonal.car, ncol = 1)
+#grid.arrange(seasonal.paw,seasonal.fre, seasonal.car, ncol = 1)
+
+ggsave("./supporting-files/annualPaw4yrYR.tiff", plot = seasonal.paw.yr, 
+       height = 2.5, width = 5, units = "in", scale = 1.5, dpi = 600)
+ggsave("./supporting-files/annualFre4yrYR.tiff",plot = seasonal.fre.yr, 
+       height = 2.5, width = 5, units = "in", scale = 1.5, dpi = 600)
+ggsave("./supporting-files/annualCar4yrYR.tiff", plot = seasonal.car.yr, 
+       height = 2.5, width = 5, units = "in", scale = 1.5, dpi = 600)
 
 # statistics should control for variation between years and treatment
 
@@ -627,12 +710,18 @@ grid.arrange(seasonal.paw,seasonal.fre, seasonal.car, ncol = 1)
 ```{r, eval = FALSE}
 grid.arrange(annual.paw,seasonal.paw,annual.fre,seasonal.fre,annual.car,seasonal.car, nrow = 3)
 
-ggsave("./supporting-files/annualPaw4yr.pdf", annual.paw, 
+ggsave("./supporting-files/annualPaw.pdf", annual.paw, 
        height = 2.5, width = 5, units = "in", scale = 1.5)
-ggsave("./supporting-files/annualFre4yr.pdf", annual.fre, 
+ggsave("./supporting-files/annualFrer.pdf", annual.fre, 
        height = 2.5, width = 5, units = "in", scale = 1.5)
-ggsave("./supporting-files/annualCar4yr.pdf", annual.car, 
+ggsave("./supporting-files/annualCar.pdf", annual.car, 
        height = 2.5, width = 5, units = "in", scale = 1.5)
+ggsave("./supporting-files/annualPaw.tiff", annual.paw, 
+       height = 2.5, width = 4, units = "in", scale = 1.4, dpi = 300)
+ggsave("./supporting-files/annualFrer.tiff", annual.fre, 
+       height = 2.5, width = 4, units = "in", scale = 1.4, dpi = 300)
+ggsave("./supporting-files/annualCar.tiff", annual.car, 
+       height = 2.5, width = 4, units = "in", scale = 1.4, dpi = 300)
 ggsave("./supporting-files/seasonalPaw.pdf", seasonal.paw, 
        height = 2.5, width = 5, units = "in", scale = 1.5)
 ggsave("./supporting-files/seasonalFre.pdf", seasonal.fre, 
@@ -893,12 +982,12 @@ p1 = ggplot(mic.merge[mic.merge$ResultMeasureValue >=0.15,], aes(x = mc.total.co
   geom_point(cex = 3) +
   xlab(expression(paste("Log10 Total Corrected Microcystin by LC - MS/MS (", mu,"g/L)"))) +
   ylab(expression(paste("Log10 Total Microcystin by ELISA (" , mu,"g/L)"))) +
-  annotate("text",x = 145, y = 100,label = "1:1", col = "black") +
-  annotate("text", x = Inf, y = Inf, label = "p = 0.011", vjust = 2, hjust = 1.25)
+  annotate("text",x = 145, y = 100,label = "1:1", col = "black", size = 7)
+  #annotate("text", x = Inf, y = Inf, label = "p = 0.011", vjust = 2, hjust = 1.25)
 
 print(p1)
 
-#ggsave("./supporting-files/FigS2Correlation.pdf", p1, units = "in", height = 3, width = 3, scale = 2)
+ggsave("./supporting-files/FigS2Correlation.tiff", p1, units = "in", height = 3, width = 3, scale = 2.5, dpi = 600)
 
 #length(mic.merge$mc.total.cor[mic.merge$mc.total.cor >0])/length(mic.merge$mc.total.cor)
 #Only 20% (19.8) of samples had comparible microcystin concencentrations; 80% of those samples contained microcystins via ELISA suggesting microcystin congeners other than the most common five variants in the samples
@@ -998,18 +1087,23 @@ colnames(int) <- c("Lake","Sample Date","ELISA MIC","LC/MS/MS MIC","ATX", "CYL",
 row.names(int) <- NULL
 int <- na.omit(int)
 pander(int)
+
+write.table(int, "./supporting-files/cyanotox.csv", row.names = FALSE)
 ```
 \newpage
 
 ## Other algal toxins
 ```{r}
-toxins <- c("Anatoxin.A", "Cylindrospermopsin","Saxtoxin")
+toxins <- c("Anatoxin.A", "Cylindrospermopsin","Saxitoxin")
 
-m2 <- m[toxins %in% m$variable]
+m2 <- m[m$variable %in% toxins,]
 
 lvls <- read.csv("./data/state_regs.csv", header = T)
 lvls <- lvls[3:5,3:4]
 lvls$toxin <- c("Anatoxin.A","Cylindrospermopsin","Saxitoxin")
+
+#install.packages("dplyr")
+m2$jul.dat <- yday(m2$Collection_Date) 
 
 p1 = ggplot(m2[m2$value >0,], aes(mo, value, shape = yr)) +
   #geom_hline(data = lvls, yintercept = lvls$PHA, lwd = 1)+
@@ -1049,7 +1143,7 @@ Other states issue both public health advisories (PHA) and no contact advisories
 For example, Ohio regularly tracks microcystin-LR, anatoxin-a, saxitoxin, and cylindrospermopsin and issues both PHA and NCA throughout the season (Table 1, next page).
 2. **Anatoxin a**: 
 The reporting limit for our method is; 
-`r length(m2$value[m2$variable == "Anatoxin.A" & m2$value >= 0.01])` samples (~ `r round(length(m2$value[m2$variable == "Anatoxin.A" & m2$value >= 0.01])/length(m2$value[m2$variable == "Anatoxin.A"]) * 100, digits = 1)` %) contained an a reportable anatoxin concentration (mean =`r round(mean(m2$value[m2$variable == "Anatoxin.A"]), digits = 1)` ug/L). 
+`r length(m2$value[m2$variable == "Anatoxin.A" & m2$value >= 0.01])` samples (`r length(m2$value[m2$variable == "Anatoxin.A" & m2$lake == "PAWNEE"])`) (~ `r round(length(m2$value[m2$variable == "Anatoxin.A" & m2$value >= 0.01])/length(m2$value[m2$variable == "Anatoxin.A"]) * 100, digits = 1)` %) contained an a reportable anatoxin concentration (mean =`r round(mean(m2$value[m2$variable == "Anatoxin.A"]), digits = 1)` ug/L). 
 The OH PHA advisory for anatoxin a is 80 ug/L; 
 In this study, `r length(m2$value[m2$variable == "Anatoxin.A" & m2$value >= 80])` samples (~ `r round(length(m2$value[m2$variable == "Anatoxin.A" & m2$value >= 80])/length(m2$value[m2$variable == "Anatoxin.A"]) * 100, digits = 1)` %) contained an anatoxin concentration greater than the PHA advisory (mean =`r round(mean(m2$value[m2$variable == "Anatoxin.A"]), digits = 1)` ug/L). 
 The OH NCA advisory is 300 ug/L; 
@@ -1059,7 +1153,7 @@ In this study, `r length(m2$value[m2$variable == "Cylindrospermopsin" & m2$value
 The OH NCA advisory for cylindrospermopsin is 20 ug/L; 
 In these samples, `r length(m2$value[m2$variable == "Cylindrospermopsin" & m2$value >=20])` samples (~ `r round(length(m2$value[m2$variable == "Cylindrospermopsin" & m2$value >= 20])/length(m2$value[m2$variable == "Cylindrospermopsin"]) * 100, digits = 1)` %) contained a cylindrospermopsin concentration greater than the NCA advisory.
 4. **Saxitoxin**: The OH PHA advisory for saxitoin is 0.8 ug/L; 
-In this study, `r length(m2$value[m2$variable == "Saxitoxin" & m2$value >=0.8])` samples (~ `r round(length(m2$value[m2$variable == "Saxitoxin" & m2$value >= 0.8])/length(m2$value[m2$variable == "Saxitoxin"]) * 100, digits = 1)` %) contained a saxitoxin concentration greater than the PHA advisory (mean = `r round(mean(m2$value[m2$variable == "Saxitoxin"]), digits = 1)` ug/L). 
+In this study, `r length(m2$value[m2$variable == "Saxitoxin" & m2$value >=0.8])` samples (~ `r round(length(m2$value[m2$variable == "Saxitoxin" & m2$value >= 0.8])/length(m2$value[m2$variable == "Saxitoxin"]) * 100, digits = 1)` %) contained a saxitoxin concentration greater than the PHA advisory (mean = `r round(mean(m2$value[m2$variable == "Saxitoxin" & m2$value >= 0.8]), digits = 1)` ug/L). 
 The OH NCA advisory for saxitoin is 3 ug/L; 
 In these samples, `r length(m2$value[m2$variable == "Saxitoxin" & m2$value >=3])` samples (~ `r round(length(m2$value[m2$variable == "Saxitoxin" & m2$value >= 3])/length(m2$value[m2$variable == "Saxitoxin"]) * 100, digits = 1)` %) contained a saxitoxin concentration greater than the NCA advisory.
 
@@ -1371,11 +1465,11 @@ str(paw.dat.merged)
 
 # merge the LCMS data with the above dataset
 paw.lcms <- mic.merge[grep("PAW",mic.merge$lake),]
-paw.lcms <- paw.lcms[,c("lake","yr.y","wk","mcla","mclf","mclr","mclw","mcrr")]
+paw.lcms <- paw.lcms[,c("lake","yr.y","wk.y","mcla","mclf","mclr","mclw","mcrr")]
 paw.lcms[,"yr.y"] <- as.numeric.factor(paw.lcms[,"yr.y"]) 
 
 # remember there are 2 data points per sample for the east and west beach
-paw.dat.merged2 <- merge(paw.dat.merged,paw.lcms, by.x = c("yr","wk"), by.y = c("yr.y","wk"), all = T)
+paw.dat.merged2 <- merge(paw.dat.merged,paw.lcms, by.x = c("yr","wk"), by.y = c("yr.y","wk.y"), all = T)
 
 #Subset to the 2006-2009 years
 paw.dat.merged3 <- paw.dat.merged2[paw.dat.merged$yr != "2005",]
@@ -1502,7 +1596,7 @@ EnvParmTable <- EnvParmTable[!duplicated(EnvParmTable),]
 #EnvParmTable <- EnvParmTable[-c(1,12),]
 row.names(EnvParmTable) <- NULL
 colnames(EnvParmTable) <- c("Organization","Characteristic","Unit of Measure","Method URL")
-
+s
 set.caption("Selected variables for analysis")
 set.alignment("left")
 pander(EnvParmTable)
